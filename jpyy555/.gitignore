@@ -1,0 +1,32 @@
+# 依赖
+node_modules/
+
+# Vercel
+.vercel/
+
+# 环境变量（重要！不要提交）
+.env
+.env.local
+.env.*.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
+
+# 编辑器
+.vscode/
+.idea/
+.vercel
+.env*
+
+# 本地备份
+*.bak
+
+# 其他临时文件
+源码未加密影视站.md
+# domainFetcherJPYY.js
+# domainSpeedTest.sh
