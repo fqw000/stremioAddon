@@ -1,0 +1,8 @@
+{
+  "name": "loommio-stremio-addon",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "health": "node health.js"
+  }
+}

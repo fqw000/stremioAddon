@@ -1,0 +1,14 @@
+{
+  "name": "tryboxstream-addon",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "author": "wangqifei.eu.org",
+  "scripts": {
+    "deploy": "vercel --prod",
+    "health": "node health.js"
+  },
+  "devDependencies": {
+    "vercel": "^37.0.0"
+  }
+}

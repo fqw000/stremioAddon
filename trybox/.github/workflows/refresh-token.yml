@@ -1,0 +1,27 @@
+name: Refresh Token
+on:
+  schedule:
+    - cron: "0 * * * *" # 每小时整点执行
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install @upstash/redis jsonwebtoken node-fetch uuid
+      - name: Run refresh token script
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON: ${{ secrets.SUPABASE_ANON }}
+          BARK_WEBHOOK_URL: ${{ secrets.BARK_KEY }}
+        run: node refresh-token.js

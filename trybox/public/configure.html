@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TryBox 配置</title>
+  <link rel="icon" href="https://trybox.app/favicon.ico">
+  <link rel="stylesheet" href="/configure.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <img src="https://trybox.app/favicon.ico" alt="TryBox" class="logo-img">
+      <p class="subtitle">配置你的影视聚合插件</p>
+    </header>
+
+    <main class="content">
+      <!-- 认证配置 -->
+      <section class="group">
+        <h2 class="group-title">认证配置</h2>
+        <p class="group-desc">留空则使用服务端默认值</p>
+        <div class="card">
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">Refresh Token</span>
+              <span class="setting-desc">用于自动刷新访问凭证</span>
+            </div>
+            <input type="text" id="rt" class="input" placeholder="留空使用默认">
+          </div>
+          <div class="divider"></div>
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">Access Token</span>
+              <span class="setting-desc">可选，优先于 Refresh Token 使用</span>
+            </div>
+            <input type="text" id="at" class="input" placeholder="留空使用 Refresh Token">
+          </div>
+        </div>
+      </section>
+
+      <!-- Catalog 选择 -->
+      <section class="group">
+        <h2 class="group-title">Catalog 选择</h2>
+        <p class="group-desc">选择在 Stremio 首页展示的内容目录</p>
+        <div class="card">
+          <div class="checkbox-group" id="cats">
+            <label class="checkbox-item"><input type="checkbox" value="home"><span>首页</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="movie" checked><span>电影</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="tv" checked><span>剧集</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="trending"><span>热门</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="popular"><span>流行</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="topRated" checked><span>高分</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="secondary"><span>剧集精选</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="tertiary"><span>经典剧集</span></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 功能开关 -->
+      <section class="group">
+        <h2 class="group-title">功能开关</h2>
+        <p class="group-desc">Catalog 和 Meta 为 ID 链路依赖，必须同时启用或关闭</p>
+        <div class="card">
+          <div class="checkbox-group checkbox-group-single" id="feats">
+            <label class="checkbox-item">
+              <input type="checkbox" value="catalog-meta" checked>
+              <span>Catalog Meta</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" value="search" checked>
+              <span>Search 搜索</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" value="subtitle" checked>
+              <span>Subtitle 字幕</span>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" value="stream" checked>
+              <span>Stream 播放</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 播放优化 -->
+ <!-- 播放优化 -->
+<section class="group">
+  <h2 class="group-title">播放优化</h2>
+  <div class="card">
+    <div class="setting">
+      <div class="setting-info">
+        <span class="setting-label">剔除 IP 绑定 URL</span>
+        <span class="setting-desc">过滤含 IP 参数的流链接（默认开启）</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="removeIdValidation" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+</section>
+
+      <!-- 字幕语言 -->
+      <section class="group">
+        <h2 class="group-title">字幕语言</h2>
+        <div class="card">
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">首选语言</span>
+              <span class="setting-desc">播放器默认加载的字幕</span>
+            </div>
+            <select id="subLang" class="select">
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+              <option value="zh-en" selected>中英文</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- TMDB Key -->
+      <section class="group">
+        <h2 class="group-title">高级选项</h2>
+        <div class="card">
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">TMDB API Key</span>
+              <span class="setting-desc">可选，用于 tt ID 转换，留空使用服务端内置</span>
+            </div>
+            <input type="text" id="tk" class="input" placeholder="留空使用默认">
+          </div>
+        </div>
+      </section>
+
+      <!-- 配置摘要 -->
+      <section class="group">
+        <h2 class="group-title">配置摘要</h2>
+        <div class="card">
+          <div class="summary" id="summary">
+            <div class="summary-line">
+              <span class="summary-key">安装地址</span>
+              <span class="summary-val" id="installUrl">生成中…</span>
+            </div>
+          </div>
+          <div class="summary-actions">
+            <button class="btn-copy" id="copyBtn">复制链接</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button id="installBtn" class="btn-install">安装到 Stremio</button>
+      <!-- <p class="footer-hint">点击按钮唤起 Stremio 客户端，或复制上方链接手动安装</p> -->
+      <p class="footer-hint">  wangqifei.eu.org </p>
+    </footer>
+  </div>
+
+  <script src="/configure.js"></script>
+</body>
+</html>
