@@ -23,16 +23,23 @@ const MAX_MEM_SIZE = 200;
 const L1_TTL = 60;
 
 /** Redis 请求超时（毫秒） */
-const REDIS_TIMEOUT = 800;
+// const REDIS_TIMEOUT = 800;
 
 /** Redis 慢响应阈值（毫秒） */
-const REDIS_SLOW_THRESHOLD = 500;
+// const REDIS_SLOW_THRESHOLD = 500;
 
-/** Redis 冷却时间（毫秒） */
-const REDIS_COOLDOWN = 60000;
+// /** Redis 冷却时间（毫秒） */
+// const REDIS_COOLDOWN = 60000;
 
-/** 触发冷却的连续慢/失败次数 */
-const REDIS_SLOW_TRIGGER = 3;
+// /** 触发冷却的连续慢/失败次数 */
+// const REDIS_SLOW_TRIGGER = 3;
+
+// ★ 按环境区分阈值：dev 环境网络波动大，生产环境收紧
+const IS_DEV = typeof process === 'undefined' || !process.env?.VERCEL_ENV; // vercel dev 下 VERCEL_ENV 为空
+const REDIS_TIMEOUT = IS_DEV ? 2000 : 800;
+const REDIS_SLOW_THRESHOLD = IS_DEV ? 1500 : 500;
+const REDIS_COOLDOWN = IS_DEV ? 15000 : 60000; // dev 缩短冷却时间
+const REDIS_SLOW_TRIGGER = IS_DEV ? 5 : 3;
 
 // ==========================================
 // Upstash 配置
@@ -147,7 +154,12 @@ async function redisCommand(...args) {
     const data = await res.json();
 
     // 判断性能
-    recordRedisOk(elapsed);
+    if (elapsed <= REDIS_SLOW_THRESHOLD) {
+      recordRedisOk(elapsed);
+    } else {
+      // 慢但成功：记录，但不清零已有的成功计数（避免误判）
+      console.warn(`[Cache] 🐢 Redis 慢响应 ${elapsed}ms（不算失败）`);
+    }
 
     return data.result;
   } catch (err) {
@@ -207,8 +219,14 @@ export async function setCache(key, data, ttlSeconds = 3600) {
 
   // ===== L2: Redis =====
   if (REDIS_ENABLED && !isRedisInCooldown()) {
-    await redisCommand('SET', key, JSON.stringify(data), 'EX', ttlSeconds);
-    console.log(`[Cache] ✅ L2 WRITE: ${key} (ttl=${ttlSeconds}s)`);
+    const beforeCooldown = isRedisInCooldown();
+    const result = await redisCommand('SET', key, JSON.stringify(data), 'EX', ttlSeconds);
+
+    if ((beforeCooldown || isRedisInCooldown()) && result === null) {
+      console.log(`[Cache] ⏸️ L2 SKIP (冷却): ${key}`);
+    } else {
+      console.log(`[Cache] ✅ L2 WRITE: ${key} (ttl=${ttlSeconds}s)`);
+    }
   }
 }
 
@@ -230,7 +248,9 @@ export function getCacheStats() {
     l1Size: memCache.size,
     l1Keys: [...memCache.keys()].slice(0, 20),
     l2Enabled: REDIS_ENABLED,
-    l2Url: UPSTASH_URL ? UPSTASH_URL.replace(/https:\/\/([^.]+).*/, 'https://$1***') : null,
+    l2Url: UPSTASH_URL
+      ? UPSTASH_URL.replace(/https:\/\/([^.]+).*/, 'https://$1***')
+      : null,
     redisInCooldown: isRedisInCooldown(),
     redisCooldownRemain: isRedisInCooldown()
       ? Math.round((redisCooldownUntil - Date.now()) / 1000)

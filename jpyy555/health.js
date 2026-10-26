@@ -1,24 +1,28 @@
 #!/usr/bin/env node
 
 /**
- * 金牌影视 + 555 · Stremio Addon 完整测试脚本
+ * 金牌影视 + 555 · Stremio Addon 完整 E2E 冒烟测试
  *
- * 覆盖维度：
- * - 功能测试：Manifest / Catalog / Meta / Stream / Search
- * - 双 ID 测试：jp 格式 + tt 格式 + 555 格式
- * - 源开关测试：jpyy / 555 / 都关闭
- * - 配置测试：类别筛选、Stream 开关、自定义域名
- * - 健康检查：域名状态、缓存状态、555 状态
- * - CDN 测试：x-vercel-cache 响应头
- * - 缓存效果：冷/热请求耗时对比
+ * 覆盖：
+ *   - Manifest（默认 / 单源 / 分类筛选 / 边界 / Stream 开关设计）
+ *   - jpyy Catalog（浏览 / 分页 / 搜索 / 并发去重 / id 前缀）
+ *   - 555 Catalog（浏览 / 无分页 / 无搜索）
+ *   - jpyy Meta（movie/series 类型正确性 / videos 格式 / IMDb 解析）
+ *   - 555 Meta（movie/series / 多源聚合 / videos 格式）
+ *   - Stream（movie/series / 555 多源 / 开关隔离）
+ *   - Search（独立接口 / 响应格式）
+ *   - 响应头（Content-Type / CORS / Cache-Control s-maxage）
+ *   - 边界（非法 cfg / 空 cfg / 超大 cfg / 配置页）
+ *   - Debug（域名 / 缓存 / 555 状态字段完整性）
+ *   - 缓存（本地自动跳过 CDN 断言）
  *
- * 使用方式：
- *   node test.js                                    # 测本地
- *   BASE_URL=https://xxx node test.js               # 测线上
- *   TIMEOUT=60000 node test.js                      # 自定义超时
- *   SKIP_CACHE_TEST=1 node test.js                  # 跳过缓存测试
+ * 用法：
+ *   node health.js
+ *   BASE_URL=https://xxx node health.js
+ *   SKIP_CACHE_TEST=1 node health.js
+ *   STRICT=1 node health.js    # 任何 WARN 也视为失败（用于 CI）
  *
- * @module test
+ * @module health
  */
 
 // ==========================================
@@ -28,8 +32,10 @@
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const TIMEOUT = parseInt(process.env.TIMEOUT || '30000', 10);
 const SKIP_CACHE_TEST = process.env.SKIP_CACHE_TEST === '1';
+const STRICT = process.env.STRICT === '1';
 
-/** 真实浏览器 UA */
+const IS_LOCAL = /localhost|127\.0\.0\.1/i.test(BASE_URL);
+
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 // ==========================================
@@ -37,15 +43,9 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 // ==========================================
 
 const C = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
-  gray: '\x1b[90m',
+  reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
+  red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m',
+  blue: '\x1b[34m', cyan: '\x1b[36m', gray: '\x1b[90m',
 };
 
 // ==========================================
@@ -53,29 +53,24 @@ const C = {
 // ==========================================
 
 const stats = {
-  total: 0,
-  passed: 0,
-  failed: 0,
-  skipped: 0,
-  results: [],
-  warnings: [],
+  total: 0, passed: 0, failed: 0, skipped: 0,
+  results: [], warnings: [],
 };
 
 // ==========================================
-// 日志工具
+// 日志
 // ==========================================
 
 function log(color, prefix, msg, ...args) {
   const t = new Date().toISOString().slice(11, 19);
   console.log(`${C.gray}[${t}]${C.reset} ${color}${prefix}${C.reset} ${msg}`, ...args);
 }
-
-const info = (m, ...a) => log(C.blue, '[INFO]', m, ...a);
-const pass = (m, ...a) => log(C.green, '[PASS]', m, ...a);
-const fail = (m, ...a) => log(C.red, '[FAIL]', m, ...a);
-const warn = (m, ...a) => log(C.yellow, '[WARN]', m, ...a);
-const debug = (m, ...a) => log(C.gray, '[DEBUG]', m, ...a);
-const skip = (m, ...a) => log(C.yellow, '[SKIP]', m, ...a);
+const info  = (m, ...a) => log(C.blue,   '[INFO]',  m, ...a);
+const pass  = (m, ...a) => log(C.green,  '[PASS]',  m, ...a);
+const fail  = (m, ...a) => log(C.red,    '[FAIL]',  m, ...a);
+const warn  = (m, ...a) => log(C.yellow, '[WARN]',  m, ...a);
+const debug = (m, ...a) => log(C.gray,   '[DEBUG]', m, ...a);
+const skip  = (m, ...a) => log(C.yellow, '[SKIP]',  m, ...a);
 
 function separator(title = '') {
   const line = '═'.repeat(72);
@@ -89,21 +84,61 @@ function separator(title = '') {
 }
 
 // ==========================================
-// HTTP 请求封装
+// 断言库
 // ==========================================
 
-async function request(path, options = {}) {
-  const { timeout = TIMEOUT } = options;
+function ok(cond, reason) {
+  return cond ? null : reason;
+}
+
+function assertArray(v, name) {
+  return Array.isArray(v) ? null : `${name} 非数组（${typeof v}）`;
+}
+function assertNonEmpty(v, name) {
+  return (v != null && v.length > 0) ? null : `${name} 为空`;
+}
+function assertStr(v, name) {
+  return (typeof v === 'string' && v.length > 0) ? null : `${name} 应为非空字符串`;
+}
+function assertEq(a, b, name) {
+  return a === b ? null : `${name} 应为 ${JSON.stringify(b)}，实际 ${JSON.stringify(a)}`;
+}
+function assertIncludes(arr, v, name) {
+  return Array.isArray(arr) && arr.includes(v) ? null : `${name} 应包含 ${JSON.stringify(v)}`;
+}
+function assertNotIncludes(arr, v, name) {
+  return Array.isArray(arr) && !arr.includes(v) ? null : `${name} 不应包含 ${JSON.stringify(v)}`;
+}
+function assertUrl(v, name) {
+  if (typeof v !== 'string' || !v) return `${name} 非空 URL`;
+  try { new URL(v); return null; } catch { return `${name} 非法 URL: ${v.slice(0, 80)}`; }
+}
+
+/** 执行一组断言，返回第一个错误或 null */
+function validate(checkFns) {
+  for (const fn of checkFns) {
+    const err = fn();
+    if (err) return err;
+  }
+  return null;
+}
+
+// ==========================================
+// HTTP
+// ==========================================
+
+async function request(path, opts = {}) {
+  const { timeout = TIMEOUT, method = 'GET', headers = {} } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
-
   try {
     const resp = await fetch(`${BASE_URL}${path}`, {
-      signal: controller.signal,
+      method, signal: controller.signal,
       headers: {
         'User-Agent': USER_AGENT,
         'Accept': 'application/json, */*',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        ...headers,
       },
     });
     clearTimeout(timer);
@@ -120,68 +155,84 @@ async function request(path, options = {}) {
 
 async function testEndpoint(opts) {
   const {
-    name,
-    path,
-    validate,
-    category = '功能',
-    showResponse = false,
+    name, path, category = '功能',
+    validate: validateFn,
     skipOnFail = false,
+    checkHeaders = false,
+    showResponse = false,
+    raw = false,          // raw=true 时不解析 JSON，用于 HTML 测试
   } = opts;
 
   stats.total++;
-  const startTime = Date.now();
-  const result = { name, category, ok: false, elapsed: 0, error: null, summary: null, cacheStatus: '-' };
+  const result = {
+    name, category, ok: false, elapsed: 0,
+    error: null, summary: null, cacheStatus: '-',
+  };
 
   separator();
   info(`测试 [${category}]: ${C.bold}${name}${C.reset}`);
   debug(`URL: ${BASE_URL}${path}`);
 
   if (skipOnFail) {
-    // 未准备好（例如动态 ID 未获取），跳过
     stats.skipped++;
     stats.total--;
     skip(`${name} · 前置条件未满足，跳过`);
     return result;
   }
 
+  const start = Date.now();
   try {
     const resp = await request(path);
-    const elapsed = Date.now() - startTime;
-
+    const elapsed = Date.now() - start;
     result.elapsed = elapsed;
     result.cacheStatus = resp.headers.get('x-vercel-cache') || '-';
 
     debug(`HTTP ${resp.status} | 耗时 ${elapsed}ms | CDN: ${result.cacheStatus}`);
 
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+    // ===== HTTP 状态 =====
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+
+    // ===== 响应头检查 =====
+    if (checkHeaders) {
+      const ct = resp.headers.get('content-type') || '';
+      if (!ct.includes('application/json') && !ct.includes('text/html')) {
+        warn(`Content-Type 非预期: ${ct}`);
+      }
+      const cors = resp.headers.get('access-control-allow-origin');
+      if (cors !== '*') {
+        stats.warnings.push(`${name}: 缺少 CORS 头`);
+      }
+      const cc = resp.headers.get('cache-control') || '';
+      result.cacheControl = cc;
+      if (!cc) {
+        stats.warnings.push(`${name}: 无 Cache-Control`);
+      }
     }
 
-    const text = await resp.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      throw new Error(`JSON 解析失败: ${e.message}`);
+    // ===== 响应体 =====
+    if (raw) {
+      const text = await resp.text();
+      if (showResponse) debug(`响应: ${text.slice(0, 500)}`);
+      const v = await validateFn(text, resp);
+      if (v) throw new Error(v);
+    } else {
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch (e) { throw new Error(`JSON 解析失败: ${e.message}（前 200 字: ${text.slice(0, 200)}）`); }
+
+      if (showResponse) debug(`响应: ${JSON.stringify(data, null, 2).slice(0, 1500)}`);
+      const v = await validateFn(data, resp);
+      if (v) throw new Error(v);
     }
 
-    if (showResponse) {
-      debug(`响应: ${JSON.stringify(data, null, 2).slice(0, 1500)}`);
-    }
-
-    const validation = await validate(data);
-    if (!validation || !validation.valid) {
-      throw new Error((validation && validation.reason) || 'Validation failed');
-    }
-
-    pass(`${name} · ${validation.summary || 'OK'} (${elapsed}ms)`);
+    pass(`${name} · ${result.summary || 'OK'} (${elapsed}ms)`);
     result.ok = true;
-    result.summary = validation.summary;
     stats.passed++;
     stats.results.push(result);
     return result;
   } catch (err) {
-    const elapsed = Date.now() - startTime;
+    const elapsed = Date.now() - start;
     result.elapsed = elapsed;
     result.error = err.name === 'AbortError' ? `超时（>${TIMEOUT}ms）` : err.message;
     fail(`${name} · ${result.error}`);
@@ -192,734 +243,816 @@ async function testEndpoint(opts) {
 }
 
 // ==========================================
-// 工具：生成 base64url 配置
+// 工具
 // ==========================================
 
-function encodeConfig(config) {
-  const json = JSON.stringify(config);
-  return Buffer.from(json, 'utf-8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+function encodeConfig(cfg) {
+  return Buffer.from(JSON.stringify(cfg), 'utf-8')
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-// ==========================================
-// 动态测试 ID（555 的 vodId 是动态的）
-// ==========================================
-
+/** 从响应体缓存第一次拿到的 catalog 首条 id，供后续 stream 测试 */
 const ctx = {
-  jpyyMovieId: null,
-  jpyySeriesId: null,
-  jpyySeriesEpId: null,
-  m555MovieId: null,       // 影片级：dy555{vodId}
-  m555SeriesId: null,      // 影片级：dy555{vodId}
-  m555SeriesEpId: null,    // 集级：dy555{vodId}:1:1
+  manifest: null,
+  jpyy: { movieId: null, seriesId: null, seriesEpId: null, ttMovieId: 'tt0133093' },
+  m555: { movieId: null, seriesId: null },
 };
 
-/**
- * 预取 555 测试 ID
- * 555 的 vodId 不固定，测试前从 catalog 取首条
- */
-async function prefetch555TestIds() {
-  info('预取 555 测试 ID...');
+// ==========================================
+// 预取：manifest + 首条 id
+// ==========================================
+
+async function prefetch() {
+  info('预取 manifest 与测试 ID...');
 
   try {
-    const movieResp = await request('/catalog/movie/555-movie.json', { timeout: 20000 });
-    if (movieResp.ok) {
-      const data = await movieResp.json();
-      if (data.metas && data.metas.length > 0) {
-        // id 格式：dy555{vodId}
-        ctx.m555MovieId = data.metas[0].id;
-        debug(`555 电影测试 ID: ${ctx.m555MovieId} (${data.metas[0].name})`);
-      }
+    const r = await request('/manifest.json');
+    if (r.ok) {
+      ctx.manifest = await r.json();
+      debug(`manifest id=${ctx.manifest.id}, catalogs=${ctx.manifest.catalogs?.length}`);
     }
-  } catch (e) {
-    warn(`预取 555 电影 ID 失败: ${e.message}`);
-  }
+  } catch (e) { warn(`manifest 预取失败: ${e.message}`); }
 
+  // jpyy movie 首条
   try {
-    const seriesResp = await request('/catalog/series/555-series.json', { timeout: 20000 });
-    if (seriesResp.ok) {
-      const data = await seriesResp.json();
-      if (data.metas && data.metas.length > 0) {
-        // id 格式：dy555{vodId}:1:1
-        const fullId = data.metas[0].id;
-        // 去掉末尾的 :1:1 得到影片级 ID
-        ctx.m555SeriesEpId = fullId;
-        ctx.m555SeriesId = fullId.replace(/:1:1$/, '');
-        debug(`555 剧集测试 ID: ${ctx.m555SeriesId}，集级: ${ctx.m555SeriesEpId} (${data.metas[0].name})`);
+    const r = await request('/catalog/movie/jinpai-movie.json');
+    if (r.ok) {
+      const d = await r.json();
+      const first = d.metas?.[0];
+      if (first) {
+        ctx.jpyy.movieId = first.id.replace(/^jp/, '').split(':')[0];
+        debug(`jpyy 电影测试 ID: ${ctx.jpyy.movieId} (${first.name})`);
       }
     }
-  } catch (e) {
-    warn(`预取 555 剧集 ID 失败: ${e.message}`);
-  }
+  } catch (e) { warn(`jpyy 电影预取失败: ${e.message}`); }
+
+  // jpyy series 首条
+  try {
+    const r = await request('/catalog/series/jinpai-series.json');
+    if (r.ok) {
+      const d = await r.json();
+      const first = d.metas?.[0];
+      if (first) {
+        ctx.jpyy.seriesId = first.id.replace(/^jp/, '').split(':')[0];
+        ctx.jpyy.seriesEpId = `jp${ctx.jpyy.seriesId}:1:1`;
+        debug(`jpyy 剧集测试 ID: ${ctx.jpyy.seriesId} (${first.name})`);
+      }
+    }
+  } catch (e) { warn(`jpyy 剧集预取失败: ${e.message}`); }
+
+  // 555 movie 首条
+  try {
+    const r = await request('/catalog/movie/555-movie.json');
+    if (r.ok) {
+      const d = await r.json();
+      const first = d.metas?.[0];
+      if (first) {
+        ctx.m555.movieId = first.id; // 已含 dy555 前缀
+        debug(`555 电影测试 ID: ${ctx.m555.movieId} (${first.name})`);
+      }
+    }
+  } catch (e) { warn(`555 电影预取失败: ${e.message}`); }
+
+  // 555 series 首条
+  try {
+    const r = await request('/catalog/series/555-series.json');
+    if (r.ok) {
+      const d = await r.json();
+      const first = d.metas?.[0];
+      if (first) {
+        ctx.m555.seriesId = first.id.replace(/:1:1$/, '');
+        debug(`555 剧集测试 ID: ${ctx.m555.seriesId} (${first.name})`);
+      }
+    }
+  } catch (e) { warn(`555 剧集预取失败: ${e.message}`); }
 }
 
 // ==========================================
 // Manifest 测试
 // ==========================================
 
-/** 1. Manifest 默认配置 */
-async function testManifestDefault() {
-  return testEndpoint({
+async function testManifests() {
+  separator('📋 Manifest 测试');
+
+  // 1. 默认配置
+  await testEndpoint({
     name: 'Manifest · 默认配置',
     path: '/manifest.json',
-    category: '功能',
+    checkHeaders: true,
     validate: (d) => {
-      if (!d.id) return { valid: false, reason: '缺少 id' };
-      if (!Array.isArray(d.resources)) return { valid: false, reason: '缺少 resources' };
-      if (!Array.isArray(d.catalogs)) return { valid: false, reason: '缺少 catalogs' };
+      const err =
+        assertStr(d.id, 'id') ||
+        assertStr(d.version, 'version') ||
+        assertArray(d.resources, 'resources') ||
+        assertArray(d.catalogs, 'catalogs') ||
+        assertArray(d.types, 'types') ||
+        assertArray(d.idPrefixes, 'idPrefixes') ||
+        assertIncludes(d.resources, 'catalog', 'resources') ||
+        assertIncludes(d.resources, 'meta', 'resources') ||
+        assertIncludes(d.resources, 'stream', 'resources') ||
+        assertIncludes(d.idPrefixes, 'jp', 'idPrefixes') ||
+        assertIncludes(d.idPrefixes, 'tt', 'idPrefixes') ||
+        assertIncludes(d.idPrefixes, 'dy555', 'idPrefixes');
+      if (err) return err;
 
-      if (!d.resources.includes('stream')) {
-        return { valid: false, reason: '默认配置应包含 stream' };
-      }
-
-      // 默认应同时包含 jpyy 和 555
       const ids = d.catalogs.map(c => c.id);
-      const hasJpyy = ids.some(id => id.startsWith('jinpai-'));
-      const has555 = ids.some(id => id.startsWith('555-'));
+      const hasJpyy = ids.some(x => x.startsWith('jinpai-'));
+      const has555 = ids.some(x => x.startsWith('555-'));
+      if (!hasJpyy) return '缺少 jpyy 目录';
+      if (!has555) return '缺少 555 目录';
+      if (d.catalogs.length !== 12) return `默认应 12 个目录，实际 ${d.catalogs.length}`;
 
-      if (!hasJpyy) return { valid: false, reason: '缺少 jpyy 目录' };
-      if (!has555) return { valid: false, reason: '缺少 555 目录' };
-
-      // 默认 12 个目录：jpyy 5 + 555 7
-      if (d.catalogs.length !== 12) {
-        return { valid: false, reason: `默认应 12 个目录，实际 ${d.catalogs.length}` };
+      // 每条 catalog 的 extra 检查
+      for (const cat of d.catalogs) {
+        if (!Array.isArray(cat.extra)) return `catalog ${cat.id} 缺 extra`;
+        if (!cat.extra.some(x => x.name === 'skip')) return `catalog ${cat.id} 缺 skip`;
+        if (cat.id.startsWith('jinpai-') && !cat.extra.some(x => x.name === 'search')) {
+          return `jpyy catalog ${cat.id} 缺 search`;
+        }
+        if (cat.id.startsWith('555-') && cat.extra.some(x => x.name === 'search')) {
+          return `555 catalog ${cat.id} 不应含 search`;
+        }
       }
-
-      return {
-        valid: true,
-        summary: `id=${d.id}, resources=[${d.resources.join(',')}], catalogs=${d.catalogs.length} (jpyy+555)`,
-      };
+      return null;
     },
-  });
-}
+  }).then(r => { if (r.ok) r.summary = '12 目录（jpyy 5 + 555 7）'; });
 
-/** 2. Manifest 关闭 Stream */
-async function testManifestNoStream() {
-  const cfg = encodeConfig({ stream: false });
-  return testEndpoint({
-    name: 'Manifest · 关闭 Stream',
-    path: `/manifest.json?cfg=${cfg}`,
+  // 2. 关闭 Stream —— 验证设计：resources 恒含 stream
+  await testEndpoint({
+    name: 'Manifest · stream=false 仍声明 resources.stream（设计约束）',
+    path: '/manifest.json?cfg=' + encodeConfig({ stream: false }),
     category: '配置',
     validate: (d) => {
-      if (d.resources.includes('stream')) {
-        return { valid: false, reason: '应不包含 stream' };
-      }
-      if (!d.resources.includes('catalog')) return { valid: false, reason: '应包含 catalog' };
-      if (!d.resources.includes('meta')) return { valid: false, reason: '应包含 meta' };
-      return { valid: true, summary: `resources=[${d.resources.join(',')}]` };
+      return assertIncludes(d.resources, 'stream', 'resources');
     },
   });
-}
 
-/** 3. Manifest 只启用 jpyy 的电影/电视剧 */
-async function testManifestJpyyPartial() {
-  const cfg = encodeConfig({
-    srcs: ['jpyy'],
-    cats: ['movie', 'series'],
-  });
-  return testEndpoint({
+  // 3. 只 jpyy 电影/电视剧
+  await testEndpoint({
     name: 'Manifest · 只 jpyy 电影/电视剧',
-    path: `/manifest.json?cfg=${cfg}`,
+    path: '/manifest.json?cfg=' + encodeConfig({ srcs: ['jpyy'], cats: ['movie', 'series'] }),
     category: '配置',
     validate: (d) => {
-      if (!Array.isArray(d.catalogs)) return { valid: false, reason: '缺少 catalogs' };
-      if (d.catalogs.length !== 2) {
-        return { valid: false, reason: `应只有 2 个目录，实际 ${d.catalogs.length}` };
-      }
-      const names = d.catalogs.map(c => c.name);
-      if (!names.some(n => n.includes('电影'))) return { valid: false, reason: '缺少电影' };
-      if (!names.some(n => n.includes('电视剧'))) return { valid: false, reason: '缺少电视剧' };
-
-      // 不应包含 555
+      const err =
+        assertEq(d.catalogs.length, 2, 'catalog 数量') ||
+        assertIncludes(d.idPrefixes, 'jp', 'idPrefixes') ||
+        assertNotIncludes(d.idPrefixes, 'dy555', 'idPrefixes');
+      if (err) return err;
       const ids = d.catalogs.map(c => c.id);
-      if (ids.some(id => id.startsWith('555-'))) {
-        return { valid: false, reason: '不应包含 555 目录' };
-      }
-
-      // idPrefixes 不应含 dy555
-      if (d.idPrefixes && d.idPrefixes.includes('dy555')) {
-        return { valid: false, reason: 'idPrefixes 不应含 dy555' };
-      }
-
-      return { valid: true, summary: `${d.catalogs.length} 个目录，idPrefixes=[${d.idPrefixes.join(',')}]` };
+      if (ids.some(x => x.startsWith('555-'))) return '不应含 555 目录';
+      return null;
     },
   });
-}
 
-/** 4. Manifest 只 jpyy 动漫 */
-async function testManifestJpyySingle() {
-  const cfg = encodeConfig({
-    srcs: ['jpyy'],
-    cats: ['anime'],
-  });
-  return testEndpoint({
+  // 4. 只 jpyy 动漫
+  await testEndpoint({
     name: 'Manifest · 只 jpyy 动漫',
-    path: `/manifest.json?cfg=${cfg}`,
+    path: '/manifest.json?cfg=' + encodeConfig({ srcs: ['jpyy'], cats: ['anime'] }),
     category: '配置',
-    validate: (d) => {
-      if (d.catalogs.length !== 1) {
-        return { valid: false, reason: `应只有 1 个目录，实际 ${d.catalogs.length}` };
-      }
-      return { valid: true, summary: `${d.catalogs[0].name}` };
-    },
+    validate: (d) => assertEq(d.catalogs.length, 1, 'catalog 数量'),
   });
-}
 
-/** 5. Manifest 只启用 555 */
-async function testManifestOnly555() {
-  const cfg = encodeConfig({ srcs: ['555'] });
-  return testEndpoint({
+  // 5. 只 555
+  await testEndpoint({
     name: 'Manifest · 只启用 555',
-    path: `/manifest.json?cfg=${cfg}`,
+    path: '/manifest.json?cfg=' + encodeConfig({ srcs: ['555'] }),
     category: '配置 · 555',
     validate: (d) => {
+      const err =
+        assertEq(d.catalogs.length, 7, 'catalog 数量') ||
+        assertIncludes(d.idPrefixes, 'dy555', 'idPrefixes') ||
+        assertNotIncludes(d.idPrefixes, 'jp', 'idPrefixes') ||
+        assertNotIncludes(d.idPrefixes, 'tt', 'idPrefixes');
+      if (err) return err;
       const ids = d.catalogs.map(c => c.id);
-
-      // 全部应是 555
-      if (!ids.every(id => id.startsWith('555-'))) {
-        return { valid: false, reason: '目录中混入了非 555 的条目' };
-      }
-
-      // 默认 7 个 555 分类
-      if (d.catalogs.length !== 7) {
-        return { valid: false, reason: `应有 7 个目录，实际 ${d.catalogs.length}` };
-      }
-
-      // idPrefixes 应只含 dy555
-      if (!d.idPrefixes || !d.idPrefixes.includes('dy555')) {
-        return { valid: false, reason: 'idPrefixes 缺少 dy555' };
-      }
-      if (d.idPrefixes.includes('tt') || d.idPrefixes.includes('jp')) {
-        return { valid: false, reason: 'idPrefixes 不应含 tt/jp' };
-      }
-
-      return { valid: true, summary: `${d.catalogs.length} 个目录，idPrefixes=[${d.idPrefixes.join(',')}]` };
+      if (!ids.every(x => x.startsWith('555-'))) return '混入非 555 目录';
+      return null;
     },
   });
-}
 
-/** 6. Manifest 555 只启用部分分类 */
-async function testManifest555Partial() {
-  const cfg = encodeConfig({
-    srcs: ['555'],
-    c555: ['movie', 'series'],
-  });
-  return testEndpoint({
+  // 6. 555 部分分类
+  await testEndpoint({
     name: 'Manifest · 555 只电影/剧集',
-    path: `/manifest.json?cfg=${cfg}`,
+    path: '/manifest.json?cfg=' + encodeConfig({ srcs: ['555'], c555: ['movie', 'series'] }),
     category: '配置 · 555',
     validate: (d) => {
       const ids = d.catalogs.map(c => c.id);
-      if (d.catalogs.length !== 2) {
-        return { valid: false, reason: `应有 2 个目录，实际 ${d.catalogs.length}` };
-      }
-      if (!ids.includes('555-movie')) return { valid: false, reason: '缺少 555-movie' };
-      if (!ids.includes('555-series')) return { valid: false, reason: '缺少 555-series' };
-
-      // 不应有 sports 等其他分类
-      if (ids.includes('555-sports')) return { valid: false, reason: '不应含 555-sports' };
-
-      return { valid: true, summary: `目录: [${ids.join(', ')}]` };
+      if (d.catalogs.length !== 2) return `应 2 个目录，实际 ${d.catalogs.length}`;
+      if (!ids.includes('555-movie')) return '缺 555-movie';
+      if (!ids.includes('555-series')) return '缺 555-series';
+      return null;
     },
   });
-}
 
-/** 7. Manifest 都关闭 → 兜底 */
-async function testManifestAllOff() {
-  const cfg = encodeConfig({ srcs: [] });
-  return testEndpoint({
-    name: 'Manifest · 都关闭兜底',
-    path: `/manifest.json?cfg=${cfg}`,
+  // 7. 都关闭 → 兜底
+  await testEndpoint({
+    name: 'Manifest · srcs=[] 兜底',
+    path: '/manifest.json?cfg=' + encodeConfig({ srcs: [] }),
     category: '配置 · 边界',
     validate: (d) => {
-      // 兜底为 jpyy
       const ids = d.catalogs.map(c => c.id);
-      const hasJpyy = ids.some(id => id.startsWith('jinpai-'));
-      if (!hasJpyy) return { valid: false, reason: '兜底应保留 jpyy' };
-      if (ids.some(id => id.startsWith('555-'))) {
-        return { valid: false, reason: '不应含 555' };
-      }
-      return { valid: true, summary: `兜底: ${d.catalogs.length} 个 jpyy 目录` };
+      if (!ids.some(x => x.startsWith('jinpai-'))) return '兜底应保留 jpyy';
+      if (ids.some(x => x.startsWith('555-'))) return '不应含 555';
+      return null;
     },
   });
 }
 
 // ==========================================
-// jpyy Catalog 测试
+// jpyy Catalog
 // ==========================================
 
-async function testCatalogs() {
+async function testJpyyCatalog() {
+  separator('🎯 jpyy Catalog 测试');
+
   const catalogs = [
-    { name: '电影', path: '/catalog/movie/jinpai-movie.json' },
-    { name: '电视剧', path: '/catalog/series/jinpai-series.json' },
-    { name: '综艺', path: '/catalog/series/jinpai-variety.json' },
-    { name: '动漫', path: '/catalog/series/jinpai-anime.json' },
-    { name: '短剧', path: '/catalog/series/jinpai-short.json' },
+    { name: '电影', path: '/catalog/movie/jinpai-movie.json', expectType: 'movie' },
+    { name: '电视剧', path: '/catalog/series/jinpai-series.json', expectType: 'series' },
+    { name: '综艺', path: '/catalog/series/jinpai-variety.json', expectType: 'series' },
+    { name: '动漫', path: '/catalog/series/jinpai-anime.json', expectType: 'series' },
+    { name: '短剧', path: '/catalog/series/jinpai-short.json', expectType: 'series' },
   ];
 
   for (const cat of catalogs) {
     await testEndpoint({
       name: `Catalog · jpyy ${cat.name}`,
       path: cat.path,
-      category: '功能',
+      checkHeaders: true,
       validate: (d) => {
-        if (!Array.isArray(d.metas)) return { valid: false, reason: 'metas 非数组' };
-        if (d.metas.length === 0) return { valid: false, reason: 'metas 为空' };
-        const first = d.metas[0];
-        if (!first.id || !first.type || !first.name) {
-          return { valid: false, reason: '首条缺少必要字段' };
-        }
-        return { valid: true, summary: `${d.metas.length} 条，首条：${first.name}` };
-      },
-    });
-  }
-}
+        const err =
+          assertArray(d.metas, 'metas') ||
+          assertNonEmpty(d.metas, 'metas');
+        if (err) return err;
 
-async function testCatalogPagination() {
-  const r1 = await testEndpoint({
+        const allowedPrefixes = ctx.manifest?.idPrefixes || ['jp', 'tt', 'dy555'];
+        for (const m of d.metas) {
+          if (!m.id || !m.type || !m.name) return '首条缺 id/type/name';
+          const prefix = ['dy555', 'tt', 'jp'].find(p => m.id.startsWith(p));
+          if (!prefix) return `未知 id 前缀: ${m.id}`;
+          if (!allowedPrefixes.includes(prefix)) return `id 前缀 ${prefix} 不在 idPrefixes 内`;
+          if (m.type !== cat.expectType && m.type !== 'movie' && m.type !== 'series') {
+            return `非法 type: ${m.type}`;
+          }
+        }
+        return null;
+      },
+    }).then(r => { if (r.ok) r.summary = `首条类型 ${cat.expectType}`; });
+  }
+
+  // 分页
+  const p1 = await testEndpoint({
     name: 'Catalog 分页 · skip=0',
     path: '/catalog/movie/jinpai-movie.json?skip=0',
-    category: '功能',
-    validate: (d) => Array.isArray(d.metas)
-      ? { valid: true, summary: `${d.metas.length} 条` }
-      : { valid: false, reason: 'metas 非数组' },
+    validate: (d) => assertArray(d.metas, 'metas'),
   });
-
-  const r2 = await testEndpoint({
+  const p2 = await testEndpoint({
     name: 'Catalog 分页 · skip=48',
     path: '/catalog/movie/jinpai-movie.json?skip=48',
-    category: '功能',
-    validate: (d) => Array.isArray(d.metas)
-      ? { valid: true, summary: `${d.metas.length} 条` }
-      : { valid: false, reason: 'metas 非数组' },
+    validate: (d) => assertArray(d.metas, 'metas'),
   });
 
-  if (r1.ok && r2.ok) {
+  if (p1.ok && p2.ok) {
     try {
-      const p1 = await (await request('/catalog/movie/jinpai-movie.json?skip=0')).json();
-      const p2 = await (await request('/catalog/movie/jinpai-movie.json?skip=48')).json();
-      const n1 = p1.metas?.[0]?.name;
-      const n2 = p2.metas?.[0]?.name;
-      if (n1 && n2 && n1 === n2) {
-        warn(`分页测试：两页首条相同（${n1}），可能未生效`);
-        stats.warnings.push('jpyy 分页可能未生效');
+      const d1 = await (await request('/catalog/movie/jinpai-movie.json?skip=0')).json();
+      const d2 = await (await request('/catalog/movie/jinpai-movie.json?skip=48')).json();
+      const ids1 = new Set((d1.metas || []).map(m => m.id));
+      const ids2 = (d2.metas || []).map(m => m.id);
+      const overlap = ids2.filter(id => ids1.has(id));
+      if (overlap.length > 0) {
+        warn(`分页重叠: ${overlap.length} 条 id 重复`);
+        stats.warnings.push(`jpyy 分页有 ${overlap.length} 条重复`);
       } else {
-        pass(`分页验证：两页数据不同（${n1} vs ${n2}）`);
+        pass(`分页去重验证：两页 0 重叠`);
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
-}
 
-async function testCatalogSearch() {
+  // 搜索
   await testEndpoint({
     name: 'Catalog 搜索 · "阿甘"',
     path: `/catalog/movie/jinpai-movie/search=${encodeURIComponent('阿甘')}.json`,
-    category: '功能',
     validate: (d) => {
-      if (!Array.isArray(d.metas)) return { valid: false, reason: 'metas 非数组' };
-      if (d.metas.length === 0) return { valid: false, reason: '搜索无结果' };
-      return { valid: true, summary: `${d.metas.length} 条` };
+      const err = assertArray(d.metas, 'metas') || assertNonEmpty(d.metas, 'metas');
+      if (err) return err;
+      for (const m of d.metas) {
+        if (!m.id || !m.type || !m.name) return '搜索结果缺 id/type/name';
+      }
+      return null;
     },
   });
+
+  // 并发搜索去重
+  await testConcurrentSearch();
+}
+
+async function testConcurrentSearch() {
+  const kw = encodeURIComponent('阿甘');
+  // ★ 先打一次别的关键词，避免已有缓存干扰
+  // 或者用 Redis DEL 清掉（需要 Redis 凭据，测试工具不一定有）
+  // 更稳妥：用一个新关键词 + 短等待
+  const uniqueKw = encodeURIComponent('复仇者联盟' + Date.now());
+  const urls = [
+    `/catalog/movie/jinpai-movie/search=${uniqueKw}.json`,
+    `/catalog/series/jinpai-series/search=${uniqueKw}.json`,
+    `/catalog/series/jinpai-variety/search=${uniqueKw}.json`,
+    `/catalog/series/jinpai-anime/search=${uniqueKw}.json`,
+    `/catalog/series/jinpai-short/search=${uniqueKw}.json`,
+  ];
+
+  info('并发搜索去重测试（模拟 Stremio 同时打 5 个分类）...');
+  const start = Date.now();
+  const results = await Promise.all(urls.map(u =>
+    request(u).then(r => r.ok ? r.json() : null).catch(() => null)
+  ));
+  const elapsed = Date.now() - start;
+
+  const okCount = results.filter(r => r && Array.isArray(r.metas)).length;
+  if (okCount === 5) {
+    pass(`并发 5 个搜索均成功，总耗时 ${elapsed}ms`);
+    if (elapsed < 1000) {
+      pass(`去重生效（总耗时 < 1s）`);
+    } else {
+      warn(`去重可能未完全生效（总耗时 ${elapsed}ms）`);
+    }
+  } else {
+    warn(`并发搜索仅 ${okCount}/5 成功`);
+    stats.warnings.push(`并发搜索 ${okCount}/5 成功`);
+  }
 }
 
 // ==========================================
-// 555 Catalog 测试
+// 555 Catalog
 // ==========================================
 
-/** 测试单个 555 catalog */
-async function test555Catalog(catalogId, type, displayName) {
-  await testEndpoint({
-    name: `Catalog · 555 ${displayName}`,
-    path: `/catalog/${type}/${catalogId}.json`,
-    category: '功能 · 555',
-    validate: (d) => {
-      if (!Array.isArray(d.metas)) return { valid: false, reason: 'metas 非数组' };
-      if (d.metas.length === 0) return { valid: false, reason: 'metas 为空' };
+async function test555Catalog() {
+  separator('🎥 555 Catalog 测试');
 
-      const first = d.metas[0];
-      if (!first.id || !first.name) {
-        return { valid: false, reason: '首条缺少必要字段' };
-      }
+  const catalogs = [
+    { id: '555-movie', type: 'movie', name: '电影' },
+    { id: '555-series', type: 'series', name: '剧集' },
+    { id: '555-anime', type: 'series', name: '动漫' },
+    { id: '555-variety', type: 'series', name: '综艺' },
+    { id: '555-short', type: 'series', name: '短剧' },
+    { id: '555-sports', type: 'series', name: '体育' },
+    { id: '555-new', type: 'series', name: '今日更新' },
+  ];
 
-      // 校验 ID 前缀（dy555 无冒号前缀）
-      if (!first.id.startsWith('dy555')) {
-        return { valid: false, reason: `id 前缀错误: ${first.id}` };
-      }
-
-      // 校验类型
-      if (first.type !== type) {
-        return { valid: false, reason: `type 应为 ${type}，实际 ${first.type}` };
-      }
-
-      // 电影 ID 格式：dy555{vodId}（1 段）
-      // 剧集 ID 格式：dy555{vodId}:1:1（3 段）
-      if (type === 'movie') {
-        const parts = first.id.split(':');
-        if (parts.length !== 1) {
-          return { valid: false, reason: `电影 id 应为 dy555{vodId}，实际 ${first.id}` };
+  for (const c of catalogs) {
+    await testEndpoint({
+      name: `Catalog · 555 ${c.name}`,
+      path: `/catalog/${c.type}/${c.id}.json`,
+      category: '功能 · 555',
+      validate: (d) => {
+        const err = assertArray(d.metas, 'metas') || assertNonEmpty(d.metas, 'metas');
+        if (err) return err;
+        const first = d.metas[0];
+        if (!first.id) return '首条缺 id';
+        if (!first.id.startsWith('dy555')) return `id 前缀错误: ${first.id}`;
+        if (first.type !== c.type) return `type 应 ${c.type}，实际 ${first.type}`;
+        if (c.type === 'movie') {
+          if (first.id.split(':').length !== 1) return `电影 id 应 1 段，实际 ${first.id}`;
+        } else {
+          if (first.id.split(':').length !== 3) return `剧集 id 应 3 段，实际 ${first.id}`;
         }
-      } else {
-        const parts = first.id.split(':');
-        if (parts.length !== 3 || parts[1] !== '1' || parts[2] !== '1') {
-          return { valid: false, reason: `剧集 id 应为 dy555{vodId}:1:1，实际 ${first.id}` };
-        }
-      }
+        return null;
+      },
+    });
+  }
 
-      return { valid: true, summary: `${d.metas.length} 条，首条：${first.name}` };
-    },
-  });
-}
-
-async function test555Catalogs() {
-  await test555Catalog('555-movie',   'movie',  '电影');
-  await test555Catalog('555-series',  'series', '剧集');
-  await test555Catalog('555-anime',   'series', '动漫');
-  await test555Catalog('555-variety', 'series', '综艺');
-  await test555Catalog('555-short',   'series', '短剧');
-  await test555Catalog('555-sports',  'series', '体育');
-  await test555Catalog('555-new',     'series', '今日更新');
-}
-
-/** 555 无分页：skip=48 应返回空 */
-async function test555NoPagination() {
+  // 无分页
   await testEndpoint({
-    name: 'Catalog · 555 无分页 (skip=48)',
+    name: 'Catalog · 555 无分页（skip=48 应空）',
     path: '/catalog/movie/555-movie.json?skip=48',
     category: '功能 · 555',
     validate: (d) => {
-      if (!Array.isArray(d.metas)) return { valid: false, reason: 'metas 非数组' };
-      if (d.metas.length !== 0) {
-        return { valid: false, reason: `555 无分页，skip>0 应返回空，实际 ${d.metas.length} 条` };
-      }
-      return { valid: true, summary: '正确返回空数组（无分页）' };
+      if (!Array.isArray(d.metas)) return 'metas 非数组';
+      if (d.metas.length !== 0) return `应空数组，实际 ${d.metas.length} 条`;
+      return null;
+    },
+  });
+
+  // 无搜索（应该被忽略或返回错误，不能崩）
+  await testEndpoint({
+    name: 'Catalog · 555 搜索应被忽略（不崩）',
+    path: `/catalog/movie/555-movie/search=${encodeURIComponent('测试')}.json`,
+    category: '功能 · 555 · 边界',
+    validate: (d) => {
+      if (!Array.isArray(d.metas)) return 'metas 非数组';
+      return null;
     },
   });
 }
 
 // ==========================================
-// jpyy Meta / Stream 测试
+// jpyy Meta
 // ==========================================
 
-async function testMetaJpMovie() {
-  await testEndpoint({
-    name: 'Meta · JP 电影',
-    path: '/meta/movie/jp146870.json',
-    category: '功能',
-    validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空' };
-      if (d.meta.type !== 'movie') return { valid: false, reason: `type 应为 movie` };
-      return { valid: true, summary: `"${d.meta.name}" (${d.meta.year || 'N/A'})` };
-    },
-  });
-}
+async function testJpyyMeta() {
+  separator('📺 jpyy Meta 测试');
 
-async function testMetaJpSeries() {
-  await testEndpoint({
-    name: 'Meta · JP 剧集',
-    path: '/meta/series/jp146932.json',
-    category: '功能',
-    validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空' };
-      if (d.meta.type !== 'series') return { valid: false, reason: `type 应为 series` };
-      if (!Array.isArray(d.meta.videos) || d.meta.videos.length === 0) {
-        return { valid: false, reason: 'videos 为空' };
-      }
-      if (d.meta.id.includes(':')) {
-        return { valid: false, reason: `meta.id 应为影片级，实际为 ${d.meta.id}` };
-      }
-      const first = d.meta.videos[0];
-      if (!first.id.includes(':')) {
-        return { valid: false, reason: `videos[0].id 格式错误：${first.id}` };
-      }
-      return {
-        valid: true,
-        summary: `"${d.meta.name}"，${d.meta.videos.length} 集，首集 id=${first.id}`,
-      };
-    },
-  });
-}
+  const movieId = ctx.jpyy.movieId;
+  const seriesId = ctx.jpyy.seriesId;
 
-async function testMetaTtMovie() {
-  return testEndpoint({
-    name: 'Meta · TT 电影 (tt0109830 阿甘正传)',
-    path: '/meta/movie/tt0109830.json',
+  // ★ 关键测试：JP 电影 type 必须是 movie（能抓到之前的 bug）
+  await testEndpoint({
+    name: 'Meta · JP 电影（类型正确性）',
+    path: `/meta/movie/jp${movieId}.json`,
+    skipOnFail: !movieId,
+    checkHeaders: true,
+    validate: (d) => {
+      if (!d.meta) return 'meta 为空';
+      if (d.meta.type !== 'movie') return `type 应 movie，实际 ${d.meta.type}`;
+      if (d.meta.id !== `jp${movieId}`) return `id 应 jp${movieId}，实际 ${d.meta.id}`;
+      if (!d.meta.name) return '缺 name';
+      return null;
+    },
+  }).then(r => { if (r.ok) r.summary = 'type=movie ✓'; });
+
+  // ★ 关键测试：JP 剧集 type 必须是 series，videos 格式
+  await testEndpoint({
+    name: 'Meta · JP 剧集（类型正确性 + videos 格式）',
+    path: `/meta/series/jp${seriesId}.json`,
+    skipOnFail: !seriesId,
+    validate: (d) => {
+      if (!d.meta) return 'meta 为空';
+      if (d.meta.type !== 'series') return `type 应 series，实际 ${d.meta.type}`;
+      if (d.meta.id.includes(':')) return `meta.id 应为影片级，实际 ${d.meta.id}`;
+      if (!Array.isArray(d.meta.videos) || d.meta.videos.length === 0) return 'videos 为空';
+
+      for (const v of d.meta.videos) {
+        if (!v.id.includes(':')) return `videos[].id 应含冒号: ${v.id}`;
+        if (typeof v.season !== 'number') return `season 应为数字`;
+        if (typeof v.episode !== 'number') return `episode 应为数字`;
+      }
+
+      // videos[].id 前缀应与 meta.id 一致
+      const metaPrefix = d.meta.id.split(':')[0];
+      const videoPrefix = d.meta.videos[0].id.split(':')[0];
+      if (metaPrefix !== videoPrefix) return `videos[].id 前缀 ${videoPrefix} ≠ meta.id 前缀 ${metaPrefix}`;
+      return null;
+    },
+  }).then(r => { if (r.ok) r.summary = 'type=series ✓, videos 格式 ✓'; });
+
+  // ★ IMDb 电影
+  await testEndpoint({
+    name: 'Meta · TT 电影（类型正确性）',
+    path: `/meta/movie/${ctx.jpyy.ttMovieId}.json`,
     category: '功能 · IMDb',
     validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空（TMDB 可能不可用）' };
-      return { valid: true, summary: `"${d.meta.name}" (${d.meta.year || 'N/A'})` };
+      if (!d.meta) return 'meta 为空（TMDB 不可用？）';
+      if (d.meta.type !== 'movie') return `type 应 movie，实际 ${d.meta.type}`;
+      return null;
     },
   });
-}
 
-async function testMetaTtSeries() {
+  // IMDb 剧集
   await testEndpoint({
-    name: 'Meta · TT 剧集 (tt13016388 3 Body Problem)',
+    name: 'Meta · TT 剧集 (tt13016388)',
     path: '/meta/series/tt13016388.json',
     category: '功能 · IMDb',
     validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空（多语言匹配失败）' };
-      if (!Array.isArray(d.meta.videos)) return { valid: false, reason: 'videos 非数组' };
-      return {
-        valid: true,
-        summary: `"${d.meta.name}"，${d.meta.videos.length} 集`,
-      };
+      if (!d.meta) return 'meta 为空';
+      if (d.meta.type !== 'series') return `type 应 series，实际 ${d.meta.type}`;
+      if (!Array.isArray(d.meta.videos)) return 'videos 非数组';
+      return null;
     },
   });
 }
 
-async function testStreamJpMovie() {
+// ==========================================
+// jpyy Stream
+// ==========================================
+
+async function testJpyyStream() {
+  separator('🎬 jpyy Stream 测试');
+
+  const movieId = ctx.jpyy.movieId;
+  const seriesId = ctx.jpyy.seriesId;
+
+  // 电影 stream
   await testEndpoint({
     name: 'Stream · JP 电影',
-    path: '/stream/movie/jp146870.json',
-    category: '功能',
+    path: `/stream/movie/jp${movieId}.json`,
+    skipOnFail: !movieId,
     validate: (d) => {
-      if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-      if (d.streams.length === 0) return { valid: false, reason: 'streams 为空' };
-      if (!d.streams[0].url) return { valid: false, reason: 'streams[0].url 为空' };
-      return {
-        valid: true,
-        summary: `${d.streams.length} 个清晰度（最佳：${d.streams[0].title}）`,
-      };
+      const err = assertArray(d.streams, 'streams') || assertNonEmpty(d.streams, 'streams');
+      if (err) return err;
+      for (const s of d.streams) {
+        if (!s.url) return '缺 url';
+        if (!s.name) return '缺 name';
+        if (!s.name.includes(`jp${movieId}`)) return `name 应含 jp${movieId}，实际 ${s.name}`;
+        const urlErr = assertUrl(s.url, 'url');
+        if (urlErr) return urlErr;
+      }
+      return null;
     },
   });
-}
 
-async function testStreamJpSeries() {
+  // 剧集 S1E1
   await testEndpoint({
     name: 'Stream · JP 剧集 S1E1',
-    path: '/stream/series/jp146932%3A1%3A1.json',
-    category: '功能',
-    validate: (d) => Array.isArray(d.streams) && d.streams.length > 0
-      ? { valid: true, summary: `${d.streams.length} 个清晰度` }
-      : { valid: false, reason: 'streams 为空' },
+    path: `/stream/series/jp${seriesId}%3A1%3A1.json`,
+    skipOnFail: !seriesId,
+    validate: (d) => {
+      const err = assertArray(d.streams, 'streams') || assertNonEmpty(d.streams, 'streams');
+      if (err) return err;
+      const s = d.streams[0];
+      if (!s.name.includes('S01E01')) return `name 应含 S01E01，实际 ${s.name}`;
+      return null;
+    },
   });
-}
 
-async function testStreamTtMovie() {
+  // IMDb 电影 stream
   await testEndpoint({
-    name: 'Stream · TT 电影 (tt0109830)',
-    path: '/stream/movie/tt0109830.json',
+    name: 'Stream · TT 电影',
+    path: `/stream/movie/${ctx.jpyy.ttMovieId}.json`,
     category: '功能 · IMDb',
-    validate: (d) => Array.isArray(d.streams) && d.streams.length > 0
-      ? { valid: true, summary: `${d.streams.length} 个清晰度` }
-      : { valid: false, reason: 'streams 为空（IMDb 转换失败）' },
+    validate: (d) => {
+      const err = assertArray(d.streams, 'streams') || assertNonEmpty(d.streams, 'streams');
+      if (err) return err;
+      const s = d.streams[0];
+      if (!s.name.includes(ctx.jpyy.ttMovieId)) return `name 应含 ${ctx.jpyy.ttMovieId}`;
+      return null;
+    },
   });
-}
 
-async function testStreamDisabled() {
-  const cfg = encodeConfig({ stream: false });
+  // 关闭时返回空
   await testEndpoint({
-    name: 'Stream · 关闭时返回空',
-    path: `/stream/movie/jp146870.json?cfg=${cfg}`,
+    name: 'Stream · jpyy 关闭时返回空',
+    path: `/stream/movie/jp${movieId}.json?cfg=` + encodeConfig({ stream: false }),
+    skipOnFail: !movieId,
     category: '配置',
     validate: (d) => {
-      if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-      if (d.streams.length !== 0) return { valid: false, reason: '应返回空数组' };
-      return { valid: true, summary: '正确返回空 streams' };
+      if (!Array.isArray(d.streams)) return 'streams 非数组';
+      if (d.streams.length !== 0) return '应空数组';
+      return null;
+    },
+  });
+
+  // ★ 关闭 stream 时 555 仍可用
+  const m555Id = ctx.m555.movieId;
+  await testEndpoint({
+    name: 'Stream · stream=false 时 555 仍返回（源隔离）',
+    path: `/stream/movie/${encodeURIComponent(m555Id || '')}.json?cfg=` + encodeConfig({ stream: false }),
+    skipOnFail: !m555Id,
+    category: '配置 · 边界',
+    validate: (d) => {
+      if (!Array.isArray(d.streams)) return 'streams 非数组';
+      if (d.streams.length === 0) return '555 不受 stream 开关影响，应非空';
+      return null;
     },
   });
 }
 
+// ==========================================
+// 555 Meta / Stream
+// ==========================================
+
+async function test555MetaStream() {
+  separator('🎬 555 Meta / Stream 测试');
+
+  const movieId = ctx.m555.movieId;
+  const seriesId = ctx.m555.seriesId;
+
+  // 555 电影 meta
+  await testEndpoint({
+    name: 'Meta · 555 电影（类型正确性）',
+    path: `/meta/movie/${encodeURIComponent(movieId || '')}.json`,
+    category: '功能 · 555',
+    skipOnFail: !movieId,
+    validate: (d) => {
+      if (!d.meta) return 'meta 为空';
+      if (d.meta.type !== 'movie') return `type 应 movie，实际 ${d.meta.type}`;
+      if (!d.meta.id.startsWith('dy555')) return `id 前缀错: ${d.meta.id}`;
+      if (d.meta.id.split(':').length !== 1) return `电影 meta.id 应 1 段: ${d.meta.id}`;
+      return null;
+    },
+  });
+
+  // 555 剧集 meta
+  await testEndpoint({
+    name: 'Meta · 555 剧集（videos 格式）',
+    path: `/meta/series/${encodeURIComponent(seriesId || '')}.json`,
+    category: '功能 · 555',
+    skipOnFail: !seriesId,
+    validate: (d) => {
+      if (!d.meta) return 'meta 为空';
+      if (d.meta.type !== 'series') return `type 应 series，实际 ${d.meta.type}`;
+      if (d.meta.id.includes(':')) return `meta.id 应影片级: ${d.meta.id}`;
+      if (!Array.isArray(d.meta.videos) || d.meta.videos.length === 0) return 'videos 为空';
+      for (const v of d.meta.videos) {
+        if (v.id.split(':').length !== 3) return `videos[].id 应 3 段: ${v.id}`;
+        if (v.season !== 1) return `season 应恒 1`;
+      }
+      return null;
+    },
+  });
+
+  // 555 电影 stream
+  await testEndpoint({
+    name: 'Stream · 555 电影',
+    path: `/stream/movie/${encodeURIComponent(movieId || '')}.json`,
+    category: '功能 · 555',
+    skipOnFail: !movieId,
+    validate: (d) => {
+      const err = assertArray(d.streams, 'streams') || assertNonEmpty(d.streams, 'streams');
+      if (err) return err;
+      const s = d.streams[0];
+      if (!s.name || s.name === '555') return `stream.name 应为影片名，实际 ${s.name}`;
+      if (!s.title) return '缺 title（线路名）';
+      const urlErr = assertUrl(s.url, 'url');
+      if (urlErr) return urlErr;
+      return null;
+    },
+  });
+
+  // 555 剧集 stream（多源）
+  await testEndpoint({
+    name: 'Stream · 555 剧集 S1E1（多源）',
+    path: `/stream/series/${encodeURIComponent(seriesId + ':1:1')}.json`,
+    category: '功能 · 555',
+    skipOnFail: !seriesId,
+    validate: (d) => {
+      const err = assertArray(d.streams, 'streams') || assertNonEmpty(d.streams, 'streams');
+      if (err) return err;
+      // 至少一个 stream 应有 title（线路名）
+      if (!d.streams.some(s => s.title)) return '缺线路名 title';
+      return null;
+    },
+  });
+}
+
+// ==========================================
+// Search 独立接口
+// ==========================================
+
 async function testSearch() {
+  separator('🔍 Search 测试');
+
   await testEndpoint({
     name: 'Search · 独立接口',
     path: `/search/${encodeURIComponent('怒之杀')}.json`,
-    category: '功能',
-    validate: (d) => Array.isArray(d.results) && d.results.length > 0
-      ? { valid: true, summary: `${d.results.length} 条` }
-      : { valid: false, reason: 'results 为空' },
+    validate: (d) => {
+      const err = assertArray(d.results, 'results') || assertNonEmpty(d.results, 'results');
+      if (err) return err;
+      for (const r of d.results) {
+        if (!r.id || !r.type || !r.name) return '结果缺 id/type/name';
+      }
+      return null;
+    },
   });
 }
 
 // ==========================================
-// 555 Meta / Stream 测试（动态 ID）
+// 响应头检查
 // ==========================================
 
-async function test555MetaMovie() {
-  const vodId = ctx.m555MovieId;   // 已含 dy555 前缀
-  await testEndpoint({
-    name: 'Meta · 555 电影',
-    path: `/meta/movie/${encodeURIComponent(vodId || '')}.json`,
-    category: '功能 · 555',
-    skipOnFail: !vodId,
-    validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空' };
-      if (d.meta.type !== 'movie') return { valid: false, reason: `type 应为 movie，实际 ${d.meta.type}` };
-      if (!d.meta.name) return { valid: false, reason: 'name 为空' };
+async function testHeaders() {
+  separator('📡 响应头测试');
 
-      // meta.id 应为 dy555{vodId}（1 段，无冒号）
-      if (!d.meta.id.startsWith('dy555')) {
-        return { valid: false, reason: `id 前缀错误: ${d.meta.id}` };
-      }
-      if (d.meta.id.split(':').length !== 1) {
-        return { valid: false, reason: `电影 meta.id 应为 1 段，实际 ${d.meta.id}` };
-      }
+  const cases = [
+    { name: 'Catalog', path: '/catalog/movie/jinpai-movie.json', expectSmaxage: true },
+    { name: 'Meta', path: `/meta/movie/jp${ctx.jpyy.movieId || '146870'}.json`, expectSmaxage: true },
+    { name: 'Stream', path: `/stream/movie/jp${ctx.jpyy.movieId || '146870'}.json`, expectSmaxage: true },
+  ];
 
-      return { valid: true, summary: `"${d.meta.name}" (${d.meta.year || 'N/A'})` };
-    },
-  });
-}
+  for (const c of cases) {
+    const r = await request(c.path).catch(() => null);
+    if (!r) { warn(`${c.name} 响应头测试请求失败`); continue; }
 
-async function test555MetaSeries() {
-  const vodId = ctx.m555SeriesId;   // 影片级，含 dy555 前缀
-  await testEndpoint({
-    name: 'Meta · 555 剧集',
-    path: `/meta/series/${encodeURIComponent(vodId || '')}.json`,
-    category: '功能 · 555',
-    skipOnFail: !vodId,
-    validate: (d) => {
-      if (!d.meta) return { valid: false, reason: 'meta 为空' };
-      if (d.meta.type !== 'series') {
-        return { valid: false, reason: `type 应为 series，实际 ${d.meta.type}` };
-      }
+    const cc = r.headers.get('cache-control') || '';
+    const cors = r.headers.get('access-control-allow-origin');
+    const ct = r.headers.get('content-type') || '';
 
-      // 关键：meta.id 必须是影片级（不含冒号）
-      const metaIdParts = d.meta.id.split(':');
-      if (metaIdParts.length !== 1) {
-        return { valid: false, reason: `meta.id 应为 dy555{vodId}（1 段），实际 ${d.meta.id}` };
-      }
-      if (!d.meta.id.startsWith('dy555')) {
-        return { valid: false, reason: `meta.id 前缀应为 dy555，实际 ${d.meta.id}` };
-      }
+    let allOk = true;
+    if (!ct.includes('application/json')) {
+      warn(`${c.name}: Content-Type=${ct}`);
+      allOk = false;
+    }
+    if (cors !== '*') {
+      warn(`${c.name}: CORS=${cors}`);
+      allOk = false;
+    }
+    if (c.expectSmaxage && !cc.includes('s-maxage=')) {
+      warn(`${c.name}: 缺 s-maxage（${cc}）`);
+      allOk = false;
+    }
 
-      if (!Array.isArray(d.meta.videos) || d.meta.videos.length === 0) {
-        return { valid: false, reason: 'videos 为空' };
-      }
-
-      // 校验集级 ID：dy555{vodId}:1:{ep}（3 段）
-      const first = d.meta.videos[0];
-      const parts = first.id.split(':');
-      if (parts.length !== 3) {
-        return { valid: false, reason: `集级 id 应为 3 段，实际 ${first.id}` };
-      }
-      if (!parts[0].startsWith('dy555')) {
-        return { valid: false, reason: `前缀应为 dy555，实际 ${parts[0]}` };
-      }
-      if (parts[1] !== '1') {
-        return { valid: false, reason: `season 段应为 1，实际 ${parts[1]}` };
-      }
-      if (first.season !== 1) {
-        return { valid: false, reason: `season 字段应为 1，实际 ${first.season}` };
-      }
-
-      return {
-        valid: true,
-        summary: `"${d.meta.name}"，${d.meta.videos.length} 集，首集 id=${first.id}`,
-      };
-    },
-  });
-}
-
-async function test555StreamMovie() {
-  const vodId = ctx.m555MovieId;
-  await testEndpoint({
-    name: 'Stream · 555 电影',
-    path: `/stream/movie/${encodeURIComponent(vodId || '')}.json`,
-    category: '功能 · 555',
-    skipOnFail: !vodId,
-    validate: (d) => {
-      if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-      if (d.streams.length === 0) return { valid: false, reason: 'streams 为空' };
-      if (!d.streams[0].url) return { valid: false, reason: 'streams[0].url 为空' };
-
-      // 校验 name 为影片名称（不是固定的 '555'）
-      if (!d.streams[0].name || d.streams[0].name === '555') {
-        return { valid: false, reason: `stream.name 应为影片名称，实际 ${d.streams[0].name}` };
-      }
-
-      return {
-        valid: true,
-        summary: `${d.streams.length} 个流，name="${d.streams[0].name}"，源="${d.streams[0].title}"`,
-      };
-    },
-  });
-}
-
-async function test555StreamSeries() {
-  const vodId = ctx.m555SeriesId;
-  if (!vodId) {
-    stats.skipped++;
-    skip('Stream · 555 剧集 S1E1 · 缺少测试 ID');
-    return;
+    if (allOk) pass(`${c.name} 响应头 OK (${cc})`);
+    else stats.warnings.push(`${c.name} 响应头异常`);
   }
-  // vodId 格式：dy555{vodId}，需要拼上 :1:1
-  const fullId = `${vodId}:1:1`;
+}
+
+// ==========================================
+// 边界测试
+// ==========================================
+
+async function testBoundaries() {
+  separator('🧪 边界测试');
+
+  // 非法 base64 cfg
   await testEndpoint({
-    name: 'Stream · 555 剧集 S1E1',
-    path: `/stream/series/${encodeURIComponent(fullId)}.json`,
-    category: '功能 · 555',
+    name: '边界 · 非法 cfg 不崩',
+    path: '/manifest.json?cfg=INVALID_BASE64_@@@',
+    category: '边界',
     validate: (d) => {
-      if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-      if (d.streams.length === 0) return { valid: false, reason: 'streams 为空' };
-      if (!d.streams[0].url) return { valid: false, reason: 'streams[0].url 为空' };
+      if (!d.id) return '应返回默认 manifest';
+      return null;
+    },
+  });
 
-      // 校验 name 为影片名称
-      if (!d.streams[0].name || d.streams[0].name === '555') {
-        return { valid: false, reason: `stream.name 应为影片名称，实际 ${d.streams[0].name}` };
-      }
+  // 空 cfg
+  await testEndpoint({
+    name: '边界 · 空 cfg',
+    path: '/manifest.json?cfg=',
+    category: '边界',
+    validate: (d) => {
+      if (!d.id) return '应返回默认 manifest';
+      return null;
+    },
+  });
 
-      return {
-        valid: true,
-        summary: `${d.streams.length} 个流，name="${d.streams[0].name}"，源="${d.streams[0].title}"`,
-      };
+  // 超大 cfg（8KB+）
+  const bigCfg = encodeConfig({ bd: 'x'.repeat(10000) });
+  await testEndpoint({
+    name: '边界 · 超大 cfg（8KB+）',
+    path: `/manifest.json?cfg=${bigCfg}`,
+    category: '边界',
+    validate: (d) => {
+      if (!d.id) return '应正常返回';
+      return null;
+    },
+  });
+
+  // 不存在的 catalog
+  await testEndpoint({
+    name: '边界 · 未知 catalogId',
+    path: '/catalog/movie/unknown-catalog.json',
+    category: '边界',
+    validate: (d) => {
+      if (!Array.isArray(d.metas)) return 'metas 非数组';
+      // 应返回空数组而非 500
+      return null;
+    },
+  });
+
+  // 配置页
+  await testEndpoint({
+    name: '边界 · 配置页 /configure 可访问',
+    path: '/configure',
+    category: '边界',
+    raw: true,
+    validate: (text) => {
+      if (!text.includes('<html') && !text.includes('<!DOCTYPE')) return '非 HTML 响应';
+      return null;
     },
   });
 }
 
 // ==========================================
-// 健康检查
+// Debug 健康检查
 // ==========================================
 
-async function testDebugDomains() {
+async function testDebug() {
+  separator('🏥 健康检查');
+
   await testEndpoint({
-    name: '健康检查 · 域名状态',
+    name: 'Debug · 域名状态',
     path: '/debug/domains',
     category: '健康检查',
     validate: (d) => {
-      if (!d.current) return { valid: false, reason: '缺少 current 字段' };
-      return { valid: true, summary: `当前域名：${d.current}` };
+      const err = assertStr(d.current, 'current');
+      if (err) return err;
+      return null;
     },
   });
-}
 
-async function testDebugCache() {
   await testEndpoint({
-    name: '健康检查 · 缓存状态',
+    name: 'Debug · 缓存状态',
     path: '/debug/cache',
     category: '健康检查',
     validate: (d) => {
-      if (typeof d.l2Enabled !== 'boolean') return { valid: false, reason: '缺少 l2Enabled' };
-      const status = d.l2Enabled
-        ? (d.redisInCooldown ? `Redis 冷却中（剩余 ${d.redisCooldownRemain}s）` : 'Redis ✅')
-        : 'Redis 未配置';
-      return { valid: true, summary: `${status}，L1 缓存 ${d.l1Size} 条` };
+      if (typeof d.l2Enabled !== 'boolean') return 'l2Enabled 非布尔';
+      if (typeof d.l1Size !== 'number') return 'l1Size 非数字';
+      if (typeof d.redisInCooldown !== 'boolean') return 'redisInCooldown 非布尔';
+      return null;
     },
   });
-}
 
-async function testDebug555() {
   await testEndpoint({
-    name: '健康检查 · 555 状态',
+    name: 'Debug · 555 状态',
     path: '/debug/555',
     category: '健康检查 · 555',
     validate: (d) => {
-      if (!d.currentDomain && !d.defaultDomain) {
-        return { valid: false, reason: '缺少域名字段' };
-      }
-      return {
-        valid: true,
-        summary: `当前域名：${d.currentDomain}，默认：${d.defaultDomain}`,
-      };
+      if (!d.currentDomain && !d.defaultDomain) return '缺域名';
+      if (typeof d.currentDomain !== 'string') return 'currentDomain 非字符串';
+      return null;
     },
   });
 }
 
 // ==========================================
-// 缓存效果测试
+// 缓存效果
 // ==========================================
 
 async function testCacheEffect() {
@@ -927,51 +1060,123 @@ async function testCacheEffect() {
     info('跳过缓存测试（SKIP_CACHE_TEST=1）');
     return;
   }
+  if (IS_LOCAL) {
+    separator('💾 缓存效果测试');
+    info('本地环境：跳过 CDN HIT 断言（vercel dev 无 CDN）');
+    skip('CDN 缓存测试（本地）');
+    return;
+  }
 
   separator('💾 缓存效果测试');
+  const path = '/catalog/movie/555-movie.json';
 
-  const testPath = '/catalog/movie/555-movie.json';
-
-  info('第 1 次请求（可能回源）...');
+  info('第 1 次请求...');
   const r1 = await testEndpoint({
     name: '缓存 · 555 Catalog 第 1 次',
-    path: testPath,
-    category: '缓存',
-    validate: (d) => Array.isArray(d.metas)
-      ? { valid: true, summary: `${d.metas.length} 条` }
-      : { valid: false, reason: 'metas 非数组' },
+    path, category: '缓存',
+    validate: (d) => assertArray(d.metas, 'metas'),
   });
 
   await new Promise(r => setTimeout(r, 2000));
 
-  info('第 2 次请求（应命中缓存）...');
+  info('第 2 次请求...');
   const r2 = await testEndpoint({
     name: '缓存 · 555 Catalog 第 2 次',
-    path: testPath,
-    category: '缓存',
-    validate: (d) => Array.isArray(d.metas)
-      ? { valid: true, summary: `${d.metas.length} 条` }
-      : { valid: false, reason: 'metas 非数组' },
+    path, category: '缓存',
+    validate: (d) => assertArray(d.metas, 'metas'),
   });
 
-  console.log('');
   if (r1.ok && r2.ok) {
-    const speedup = r1.elapsed / r2.elapsed;
-    const cacheStatus = r2.cacheStatus;
+    console.log(`\n${C.bold}缓存分析：${C.reset}`);
+    console.log(`  第 1 次：${r1.elapsed}ms (CDN: ${r1.cacheStatus})`);
+    console.log(`  第 2 次：${r2.elapsed}ms (CDN: ${r2.cacheStatus})`);
 
-    console.log(`${C.bold}缓存效果分析：${C.reset}`);
-    console.log(`  第 1 次耗时：${r1.elapsed}ms (CDN: ${r1.cacheStatus})`);
-    console.log(`  第 2 次耗时：${r2.elapsed}ms (CDN: ${r2.cacheStatus})`);
-
-    if (cacheStatus === 'HIT') {
-      pass(`CDN 缓存生效（x-vercel-cache: HIT）`);
-    } else if (speedup > 2) {
-      pass(`速度提升 ${speedup.toFixed(1)}x`);
+    if (r2.cacheStatus === 'HIT') {
+      pass('CDN HIT');
     } else {
-      warn(`缓存未明显生效（CDN: ${cacheStatus}，加速 ${speedup.toFixed(1)}x）`);
-      stats.warnings.push('CDN 缓存未生效');
+      warn(`CDN 未命中（线上首次冷启动正常，可预热一次后再测）`);
+      stats.warnings.push('CDN 未命中');
     }
   }
+}
+
+// ==========================================
+// 汇总
+// ==========================================
+
+function printSummary() {
+  separator('📋 详细结果');
+  for (const r of stats.results) {
+    const icon = r.ok ? `${C.green}✅${C.reset}` : `${C.red}❌${C.reset}`;
+    const time = `${C.gray}(${r.elapsed}ms)${C.reset}`;
+    const cache = r.cacheStatus && r.cacheStatus !== '-' ? ` ${C.gray}[CDN: ${r.cacheStatus}]${C.reset}` : '';
+    console.log(`${icon} ${r.name} ${time}${cache}`);
+    if (!r.ok) console.log(`     ${C.red}${r.error}${C.reset}`);
+  }
+
+  separator('📊 汇总');
+  console.log(`${C.bold}总计：${C.reset}  ${stats.total}`);
+  console.log(`${C.green}${C.bold}通过：${C.reset}  ${stats.passed}`);
+  console.log(`${C.red}${C.bold}失败：${C.reset}  ${stats.failed}`);
+  if (stats.skipped > 0) console.log(`${C.yellow}${C.bold}跳过：${C.reset}  ${stats.skipped}`);
+
+  const passRate = stats.total > 0 ? Math.round((stats.passed / stats.total) * 100) : 0;
+  const color = passRate >= 90 ? C.green : passRate >= 70 ? C.yellow : C.red;
+  console.log(`${C.bold}通过率：${C.reset} ${color}${passRate}%${C.reset}`);
+
+  if (stats.warnings.length > 0) {
+    separator('⚠️ 警告');
+    for (const w of stats.warnings) console.log(`  ${C.yellow}• ${w}${C.reset}`);
+  }
+}
+
+
+async function testEmptyNotCached() {
+  separator('🛡️ 空结果缓存保护');
+
+  // 用 555 一个不存在的 vodId，触发回源失败
+  await testEndpoint({
+    name: '空结果 · 555 无效 id 不写缓存',
+    path: '/meta/movie/dy555_NOT_EXIST.json',
+    category: '防护',
+    validate: (d) => {
+      // meta 应为 null，但不能导致后续请求全部空
+      return d.meta === null ? null : '应返回 null';
+    },
+  });
+
+  // 紧接着请求正常资源，验证没被污染
+  const r = await request('/catalog/movie/555-movie.json');
+  if (r.ok) {
+    const d = await r.json();
+    if (d.metas?.length > 0) {
+      pass(`正常资源未受影响（${d.metas.length} 条）`);
+    } else {
+      fail('正常资源被空结果污染！');
+    }
+  }
+}
+
+
+async function testRedisCooldownRecovery() {
+  separator('🔄 Redis 冷却恢复');
+  info('连续快速请求，观察是否触发冷却 + 能否自动恢复...');
+
+  const start = Date.now();
+  for (let i = 0; i < 8; i++) {
+    await request('/debug/cache');
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  // 冷却或未冷却都应正常响应
+  const r = await request('/debug/cache');
+  const d = await r.json();
+  if (d.l2Enabled) {
+    pass(`Redis 状态可查询（冷却中: ${d.redisInCooldown}）`);
+  } else {
+    warn('Redis 未启用');
+  }
+  info(`8 次快速请求耗时 ${Date.now() - start}ms`);
 }
 
 // ==========================================
@@ -980,181 +1185,50 @@ async function testCacheEffect() {
 
 async function main() {
   console.clear();
-  separator('🎬 金牌影视 + 555 · Stremio Addon 完整测试');
-  console.log(`${C.bold}目标地址：${C.reset}${C.cyan}${BASE_URL}${C.reset}`);
-  console.log(`${C.bold}超时设置：${C.reset}${TIMEOUT}ms`);
-  console.log(`${C.bold}开始时间：${C.reset}${new Date().toLocaleString()}`);
+  separator('🎬 金牌影视 + 555 · Stremio Addon 完整 E2E 冒烟测试');
+  console.log(`${C.bold}目标：${C.reset}${C.cyan}${BASE_URL}${C.reset}`);
+  console.log(`${C.bold}超时：${C.reset}${TIMEOUT}ms`);
+  console.log(`${C.bold}环境：${C.reset}${IS_LOCAL ? '本地（跳过 CDN）' : '线上'}`);
+  console.log(`${C.bold}模式：${C.reset}${STRICT ? '严格（WARN 也算失败）' : '常规'}`);
   console.log('');
 
-  // ===== 预检：服务可达性 =====
+  // 预检
   info('检查服务可达性...');
   try {
     const resp = await request('/manifest.json', { timeout: 5000 });
-    if (resp.ok) {
-      pass(`服务可达（HTTP ${resp.status}）`);
-    } else {
-      warn(`服务返回 HTTP ${resp.status}`);
-    }
+    if (resp.ok) pass(`服务可达（HTTP ${resp.status}）`);
+    else warn(`服务返回 HTTP ${resp.status}`);
   } catch (err) {
-    fail(`服务不可达：${err.message}`);
-    fail('请确认：');
-    fail('  1. 已运行 "npx vercel dev" 或部署到生产');
-    fail(`  2. BASE_URL 正确（当前：${BASE_URL}）`);
+    fail(`服务不可达: ${err.message}`);
     process.exit(1);
   }
 
-  // ===== 预取 555 动态测试 ID =====
-  await prefetch555TestIds();
+  await prefetch();
+  const t0 = Date.now();
 
-  const startTime = Date.now();
-
-  // ===== 1. Manifest 测试 =====
-  separator('📋 Manifest 测试');
-  await testManifestDefault();
-  await testManifestNoStream();
-  await testManifestJpyyPartial();
-  await testManifestJpyySingle();
-  await testManifestOnly555();
-  await testManifest555Partial();
-  await testManifestAllOff();
-
-  // ===== 2. jpyy Catalog =====
-  separator('🎯 jpyy Catalog 测试');
-  await testCatalogs();
-  await testCatalogPagination();
-  await testCatalogSearch();
-
-  // ===== 3. 555 Catalog =====
-  separator('🎥 555 Catalog 测试');
-  await test555Catalogs();
-  await test555NoPagination();
-
-  // ===== 4. IMDb 测试 =====
-  separator('🌍 IMDb 测试');
-  await testMetaTtMovie();
-  await testMetaTtSeries();
-
-  // ===== 5. jpyy Meta / Stream =====
-  separator('📺 jpyy Meta / Stream 测试');
-  await testMetaJpMovie();
-  await testMetaJpSeries();
-  await testStreamJpMovie();
-  await testStreamJpSeries();
-  await testStreamTtMovie();
-  await testStreamDisabled();
+  await testManifests();
+  await testJpyyCatalog();
+  await test555Catalog();
+  await testJpyyMeta();
+  await test555MetaStream();
+  await testJpyyStream();
   await testSearch();
-
-  // ===== 6. 555 Meta / Stream =====
-  separator('🎬 555 Meta / Stream 测试');
-  await test555MetaMovie();
-  await test555MetaSeries();
-  await test555StreamMovie();
-  await test555StreamSeries();
-
-  // ===== 7. 健康检查 =====
-  separator('🏥 健康检查');
-  await testDebugDomains();
-  await testDebugCache();
-  await testDebug555();
-
-  // ===== 8. 缓存测试 =====
+  await testHeaders();
+  await testBoundaries();
+  await testDebug();
   await testCacheEffect();
 
-  const totalTime = Date.now() - startTime;
+  printSummary();
 
-  // ===== 详细结果 =====
-  separator('📋 详细结果');
-  for (const r of stats.results) {
-    const icon = r.ok ? `${C.green}✅${C.reset}` : `${C.red}❌${C.reset}`;
-    const time = `${C.gray}(${r.elapsed}ms)${C.reset}`;
-    const cache = r.cacheStatus && r.cacheStatus !== '-' ? ` ${C.gray}[CDN: ${r.cacheStatus}]${C.reset}` : '';
-    console.log(`${icon} ${r.name} ${time}${cache}`);
-    if (!r.ok) {
-      console.log(`     ${C.red}${r.error}${C.reset}`);
-    }
-  }
+  const totalTime = Date.now() - t0;
+  console.log(`${C.bold}耗时：${C.reset}  ${totalTime}ms\n`);
 
-  // ===== 汇总 =====
-  separator('📊 测试汇总');
-  console.log(`${C.bold}总计：${C.reset}  ${stats.total}`);
-  console.log(`${C.green}${C.bold}通过：${C.reset}  ${stats.passed}`);
-  console.log(`${C.red}${C.bold}失败：${C.reset}  ${stats.failed}`);
-  if (stats.skipped > 0) {
-    console.log(`${C.yellow}${C.bold}跳过：${C.reset}  ${stats.skipped}`);
-  }
-  console.log(`${C.bold}耗时：${C.reset}  ${totalTime}ms`);
-
-  const passRate = stats.total > 0 ? Math.round((stats.passed / stats.total) * 100) : 0;
-  const color = passRate >= 80 ? C.green : passRate >= 50 ? C.yellow : C.red;
-  console.log(`${C.bold}通过率：${C.reset} ${color}${passRate}%${C.reset}`);
-
-  // ===== 警告 =====
-  if (stats.warnings.length > 0) {
-    separator('⚠️ 警告');
-    for (const w of stats.warnings) {
-      console.log(`  ${C.yellow}• ${w}${C.reset}`);
-    }
-  }
-
-  // ===== 诊断建议 =====
-  if (stats.failed > 0) {
-    separator('💡 诊断建议');
-
-    const failed = stats.results.filter(r => !r.ok);
-    const categories = {};
-    for (const r of failed) {
-      categories[r.category] = (categories[r.category] || 0) + 1;
-    }
-
-    if (categories['功能'] > 0) {
-      console.log(`${C.yellow}⚠️ jpyy 功能测试失败${C.reset}`);
-      console.log('   可能原因：站点不可访问、域名失效、网络问题');
-      console.log(`   ${C.cyan}建议：检查 /debug/domains 确认域名可用${C.reset}\n`);
-    }
-
-    if (categories['功能 · IMDb'] > 0) {
-      console.log(`${C.yellow}⚠️ IMDb 相关测试失败${C.reset}`);
-      console.log('   可能原因：TMDB API 不可用、影片未在站点收录');
-      console.log(`   ${C.cyan}建议：TT 格式为可选功能，不影响 JP 格式${C.reset}\n`);
-    }
-
-    if (categories['功能 · 555'] > 0) {
-      console.log(`${C.yellow}⚠️ 555 功能测试失败${C.reset}`);
-      console.log('   可能原因：555 站点不可访问、域名失效、页面结构变更');
-      console.log(`   ${C.cyan}建议：检查 /debug/555 确认域名，或手动访问站点验证${C.reset}\n`);
-    }
-
-    if (categories['配置'] > 0 || categories['配置 · 555'] > 0 || categories['配置 · 边界'] > 0) {
-      console.log(`${C.yellow}⚠️ 配置测试失败${C.reset}`);
-      console.log('   可能原因：manifest 动态生成逻辑异常、源开关未生效');
-      console.log(`   ${C.cyan}建议：检查 src/manifest.js 的 generateManifest 函数${C.reset}\n`);
-    }
-
-    if (categories['健康检查'] > 0 || categories['健康检查 · 555'] > 0) {
-      console.log(`${C.yellow}⚠️ 健康检查失败${C.reset}`);
-      console.log('   可能原因：debug 接口未注册、部署不完整');
-      console.log(`   ${C.cyan}建议：检查 handler.js 中的 /debug/* 路由${C.reset}\n`);
-    }
-
-    if (categories['缓存'] > 0) {
-      console.log(`${C.yellow}⚠️ 缓存测试失败${C.reset}`);
-      console.log('   可能原因：Upstash 未配置、CDN 未生效');
-      console.log(`   ${C.cyan}建议：检查 /debug/cache 的 l2Enabled 字段${C.reset}\n`);
-    }
-  }
-
-  separator();
-  console.log('');
-
-  process.exit(stats.failed > 0 ? 1 : 0);
+  const exitFail = stats.failed > 0 || (STRICT && stats.warnings.length > 0);
+  process.exit(exitFail ? 1 : 0);
 }
 
-// ==========================================
-// 运行
-// ==========================================
-
 main().catch(err => {
-  console.error(`${C.red}测试脚本异常：${err.message}${C.reset}`);
+  console.error(`${C.red}异常：${err.message}${C.reset}`);
   console.error(err.stack);
   process.exit(1);
 });

@@ -14,6 +14,7 @@
  *   ② 内存记录的成功域名（实例级）
  *   ③ 硬编码默认域名
  *   ④ 硬编码备用域名列表
+ *   ⑤ ★ 以上全部失败时，从发布页 https://zxdy91.com/ 动态提取域名重试
  *
  * @module adapter-555
  */
@@ -47,13 +48,13 @@ import {
  * 全部使用预先拼好的 path，避免再走一层函数
  */
 export const CATALOG_555_MAP = {
-  '555-movie':   { path: '/vod/type/id/1.html',   typeId: '1' },
-  '555-series':  { path: '/vod/type/id/2.html',   typeId: '2' },
-  '555-anime':   { path: '/vod/type/id/3.html',   typeId: '3' },
-  '555-variety': { path: '/vod/type/id/4.html',   typeId: '4' },
-  '555-short':   { path: '/vod/type/id/45.html',  typeId: '45' },
-  '555-sports':  { path: '/vod/type/id/39.html',  typeId: '39' },
-  '555-new':     { path: '/label/new.html',       typeId: 'new' },
+  '555-movie': { path: '/vod/type/id/1.html', typeId: '1' },
+  '555-series': { path: '/vod/type/id/2.html', typeId: '2' },
+  '555-anime': { path: '/vod/type/id/3.html', typeId: '3' },
+  '555-variety': { path: '/vod/type/id/4.html', typeId: '4' },
+  '555-short': { path: '/vod/type/id/45.html', typeId: '45' },
+  '555-sports': { path: '/vod/type/id/39.html', typeId: '39' },
+  '555-new': { path: '/label/new.html', typeId: 'new' },
 };
 
 // ==========================================
@@ -61,7 +62,7 @@ export const CATALOG_555_MAP = {
 // ==========================================
 
 /** 硬编码默认域名 */
-const DEFAULT_DOMAIN_555 = '555zxdy.cc';
+const DEFAULT_DOMAIN_555 = '91zxdy.com';
 
 /** 硬编码备用域名（默认失败时依次尝试） */
 const FALLBACK_DOMAINS_555 = [
@@ -69,6 +70,13 @@ const FALLBACK_DOMAINS_555 = [
   '555zxdy.cc',
   '555gy.cc',
 ];
+
+/** ★ 发布页：硬编码全部失败时，从这里动态提取新域名 */
+const PUBLISH_URL_555 = 'https://zxdy91.com/';
+
+/** ★ 远程域名缓存（5 分钟内复用，避免频繁请求发布页） */
+let remoteDomainsCache555 = { domains: [], at: 0 };
+const REMOTE_DOMAINS_TTL_555 = 5 * 60 * 1000;
 
 /** 555 专用 UA（来自原始源码，对 555 站点更稳） */
 const UA_555 = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -92,18 +100,69 @@ export function getCurrentDomain555() {
 }
 
 // ==========================================
+// ★ 从发布页动态提取域名
+// ==========================================
+
+/**
+ * 抓取发布页并提取域名。
+ * 优先解析 <li data-url="https://...">，
+ * 降级解析 <a href="/go.php?BASE64">。
+ *
+ * @returns {Promise<string[]>} 域名列表（可能为空）
+ */
+async function fetchRemoteDomains555() {
+  // 5 分钟内复用
+  if (Date.now() - remoteDomainsCache555.at < REMOTE_DOMAINS_TTL_555) {
+    return remoteDomainsCache555.domains;
+  }
+
+  try {
+    const resp = await rawFetch(PUBLISH_URL_555, { 'User-Agent': UA_555 }, 8000);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const html = await resp.text();
+
+    const domains = [];
+    const push = (u) => {
+      try {
+        const host = new URL(u).hostname;
+        if (host && !domains.includes(host)) domains.push(host);
+      } catch { /* 忽略非法 URL */ }
+    };
+
+    // 1) data-url（首选，结构最稳定）
+    for (const m of html.matchAll(/data-url="([^"]+)"/gi)) push(m[1]);
+
+    // 2) /go.php?BASE64（兜底）
+    if (domains.length === 0) {
+      for (const m of html.matchAll(/\/go\.php\?([A-Za-z0-9+/=]+)/g)) {
+        try { push(atob(m[1])); } catch { /* 忽略解码失败 */ }
+      }
+    }
+
+    if (domains.length === 0) throw new Error('发布页未提取到域名');
+
+    console.log(`[555] 🌐 发布页提取到 ${domains.length} 个域名: ${domains.join(', ')}`);
+    remoteDomainsCache555 = { domains, at: Date.now() };
+    return domains;
+  } catch (err) {
+    console.warn(`[555] ❌ 发布页提取域名失败: ${err.message}`);
+    return [];
+  }
+}
+
+// ==========================================
 // 挑战感知的单域名请求
 // ==========================================
 
 /**
  * 对单个域名发起"带挑战处理"的请求
- * 
+ *
  * 流程：
  *   1. 从 Redis 取缓存的 cookie
  *   2. 带 cookie 请求
  *   3. 若返回是挑战页 → 走挑战求解 → 带新 cookie 重试
  *   4. 若成功 → 从响应头捕获 __vg → 写回 Redis
- * 
+ *
  * @param {string} url - 完整 URL
  * @param {string} referer - Referer
  * @returns {Promise<{ html: string, url: string }>}
@@ -212,7 +271,7 @@ async function rawFetch(url, headers, timeout = 8000) {
 }
 
 // ==========================================
-// 域名切换（替换现有实现）
+// 域名切换（两段式：硬编码 → 发布页）
 // ==========================================
 
 async function fetch555WithFallback(path) {
@@ -231,36 +290,46 @@ async function fetch555WithFallback(path) {
     }
   }
 
-  // ===== 未配置：依次尝试 =====
-  const candidates = [
-    currentDomain555,
-    DEFAULT_DOMAIN_555,
-    ...FALLBACK_DOMAINS_555,
-  ].filter(Boolean);
-  const unique = [...new Set(candidates)];
-
+  const tried = new Set();
   let lastErr;
-  for (const domain of unique) {
-    const url = `https://${domain}${path}`;
-    const referer = `https://${domain}/`;
-    try {
-      const { html } = await fetchWithChallenge(url, referer);
-      if (currentDomain555 !== domain) {
-        console.log(`[555] 🌐 域名切换: ${currentDomain555 || '(none)'} → ${domain}`);
-        currentDomain555 = domain;
+
+  /** 依次尝试一个域名列表，返回首个成功的 HTML；全部失败返回 null */
+  const tryList = async (domains) => {
+    for (const domain of domains) {
+      if (tried.has(domain)) continue;
+      tried.add(domain);
+
+      const url = `https://${domain}${path}`;
+      const referer = `https://${domain}/`;
+      try {
+        const { html } = await fetchWithChallenge(url, referer);
+        if (currentDomain555 !== domain) {
+          console.log(`[555] 🌐 域名切换: ${currentDomain555 || '(none)'} → ${domain}`);
+          currentDomain555 = domain;
+        }
+        return html;
+      } catch (err) {
+        lastErr = err;
+        if (currentDomain555 === domain) currentDomain555 = null;
+        console.warn(`[555] ❌ 域名失败 (${domain}): ${err.message}`);
       }
-      return html;
-    } catch (err) {
-      lastErr = err;
-      if (currentDomain555 === domain) currentDomain555 = null;
-      console.warn(`[555] ❌ 域名失败 (${domain}): ${err.message}`);
     }
-  }
+    return null;
+  };
+
+  // ===== 第一轮：内存 + 硬编码默认 + 硬编码 fallback =====
+  const staticList = [currentDomain555, DEFAULT_DOMAIN_555, ...FALLBACK_DOMAINS_555].filter(Boolean);
+  const html1 = await tryList(staticList);
+  if (html1 !== null) return html1;
+
+  // ===== 第二轮：发布页动态提取后重试 =====
+  console.log('[555] ⚠️ 硬编码域名全部失败，尝试从发布页获取新域名...');
+  const remoteDomains = await fetchRemoteDomains555();
+  const html2 = await tryList(remoteDomains);
+  if (html2 !== null) return html2;
 
   throw lastErr || new Error('555: all domains failed');
 }
-
-
 
 // ==========================================
 // Catalog（缓存 5 分钟）
@@ -303,14 +372,19 @@ export async function fetchCatalog555(catalogId, skip = 0) {
 
   const result = Array.isArray(list)
     ? list.map(item => ({
-        vodId: item.vodId,
-        vodName: item.vodName,
-        vodPic: item.vodPic,
-        vodRemarks: item.vodRemarks,
-      }))
+      vodId: item.vodId,
+      vodName: item.vodName,
+      vodPic: item.vodPic,
+      vodRemarks: item.vodRemarks,
+    }))
     : [];
 
-  await setCache(cacheKey, result, 300);
+  // await setCache(cacheKey, result, 300);
+  if (result.length === 0) {
+    console.warn(`[555] ⚠️ ${catalogId} 返回空，跳过缓存`);
+  } else {
+    await setCache(cacheKey, result, 300);
+  }
   console.log(`[555] ✅ Catalog 写入: ${cacheKey} (${result.length} 条)`);
   return result;
 }
@@ -438,7 +512,8 @@ export async function fetchEpisodes555(vodId) {
  * @param {Array<{sid, name, episodes: [{nid, name}]}>} sources
  * @returns {Array<{episode, name, sources: [{sid, nid, sourceName}]}>}
  */
-function mergeEpisodesFromSources(sources) {
+// function mergeEpisodesFromSources(sources) {
+export function mergeEpisodesFromSources(sources) {
   if (!Array.isArray(sources) || sources.length === 0) return [];
 
   // episodeName → { name, sources: [] }
@@ -553,5 +628,6 @@ export function get555Status() {
     defaultDomain: DEFAULT_DOMAIN_555,
     fallbackDomains: FALLBACK_DOMAINS_555,
     memoryDomain: currentDomain555,
+    remoteDomains: remoteDomainsCache555.domains, // ★ 新增：缓存中的远程域名
   };
 }

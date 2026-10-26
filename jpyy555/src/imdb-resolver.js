@@ -3,6 +3,8 @@
  * 
  * 关键设计：
  *   - inflight 并发去重：meta/stream 同时请求只解析一次
+ *   - 并发拉别名 ∥ 主标题搜索：省 ~2s
+ *   - 条件化候选精简：纯中文 ≥ 2 时只搜 top-3 中文 + top-1 其他
  *   - 从 meta.type 读取修正后的类型
  *   - seasonYear：剧集优先用目标季的播出年匹配
  * 
@@ -30,34 +32,34 @@ const MAX_SEARCH_TITLES = 6;
 const inflight = new Map();
 
 // ==========================================
-// 主入口
+// 主入口（P0-3 修复：先 set 再 await）
 // ==========================================
 
 export async function resolveImdbToVod(imdbId, type, season = 1) {
   const cacheKey = `imdb2vod:${imdbId}:${type}:${season}`;
 
-  // ===== 1. Redis 缓存 =====
-  const cached = await getCache(cacheKey);
-  if (cached) {
-    console.log(`[IMDb→Vod] ✅ 缓存命中: vodId=${cached.vodId}`);
-    return cached;
-  }
-
-  // ===== 2. 进行中去重 =====
+  // ★ 先同步检查 inflight（关键：在 await 之前）
   if (inflight.has(cacheKey)) {
     console.log(`[IMDb→Vod] ⏳ 等待进行中的解析: ${cacheKey}`);
     return inflight.get(cacheKey);
   }
 
-  const promise = doResolve(imdbId, type, season, cacheKey)
-    .finally(() => inflight.delete(cacheKey));
+  // ★ 立即同步 set 占位 promise，避免 await getCache 期间被其他请求穿透
+  const promise = (async () => {
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      console.log(`[IMDb→Vod] ✅ 缓存命中: vodId=${cached.vodId}`);
+      return cached;
+    }
+    return doResolve(imdbId, type, season, cacheKey);
+  })().finally(() => inflight.delete(cacheKey));
 
   inflight.set(cacheKey, promise);
   return promise;
 }
 
 // ==========================================
-// 实际解析逻辑
+// 实际解析逻辑（P2-4 分层 1+2）
 // ==========================================
 
 async function doResolve(imdbId, type, season, cacheKey) {
@@ -83,39 +85,67 @@ async function doResolve(imdbId, type, season, cacheKey) {
     (seasonYear ? ` seasonYear=${seasonYear}` : '')
   );
 
-  // ===== 2. 候选标题 =====
-  const candidateTitles = await collectCandidateTitles(meta, effectiveType);
-  if (candidateTitles.length === 0) {
-    console.error(`[IMDb→Vod] ❌ 无候选标题`);
+  // ===== 2+3. 并行：拉别名 ∥ 搜主标题 =====
+  // ★ 核心优化：不再串行 await 别名拉取
+  const t0 = Date.now();
+  const [altTitles, primaryResults] = await Promise.all([
+    meta.tmdbId
+      ? fetchAlternativeTitles(meta.tmdbId, effectiveType).catch(err => {
+          console.warn(`[Candidates] 别名获取失败: ${err.message}`);
+          return [];
+        })
+      : Promise.resolve([]),
+    searchVideos(meta.title).catch(err => {
+      console.warn(`[MultiSearch] 主标题搜索失败: ${err.message}`);
+      return [];
+    }),
+  ]);
+
+  console.log(
+    `[IMDb→Vod] ⚡ 别名+主标题并发完成 ${Date.now() - t0}ms ` +
+    `(alt=${altTitles.length}, primary=${primaryResults.length})`
+  );
+
+  // ===== 3. 组装候选（条件化精简）=====
+  const candidateTitles = buildCandidateTitles(meta, altTitles);
+  if (candidateTitles.length === 0 && primaryResults.length === 0) {
+    console.error(`[IMDb→Vod] ❌ 无候选标题且主标题无结果`);
     return null;
   }
+  if (candidateTitles.length > 0) {
+    console.log(`[Candidates] 📋 ${candidateTitles.length} 个: ${candidateTitles.join(' | ')}`);
+  }
 
-  // ===== 3. 多标题搜索 =====
-  const { results } = await searchWithMultipleTitles(candidateTitles);
+  // ===== 4. 搜索剩余候选（跳过主标题，因为已搜过）=====
+  const { results } = await searchWithMultipleTitles(candidateTitles, {
+    skipKeyword: meta.title,
+    initialResults: primaryResults,
+  });
   if (results.length === 0) {
     console.error(`[IMDb→Vod] ❌ 无搜索结果`);
     return null;
   }
   console.log(`[IMDb→Vod] 📋 候选结果数: ${results.length}`);
 
-  // ===== 4. 目标 =====
+  // ===== 5. 目标（★ 保证主标题一定在 titles 里）=====
+  const targetTitles = [...new Set([meta.title, ...candidateTitles])].filter(Boolean);
   const target = {
-    titles: candidateTitles,
+    titles: targetTitles,
     year: meta.year,
-    seasonYear,                                          // ★ 目标季年份
+    seasonYear,
     cast: meta.cast || [],
     type: effectiveType,
     season: effectiveType === 'series' ? season : null,
   };
 
-  // ===== 5. 严格模式 =====
+  // ===== 6. 严格模式 =====
   let winner = pickBest(target, results, {
     minScore: THRESHOLDS.MIN_FINAL_SCORE,
     minTitleSim: THRESHOLDS.MIN_TITLE_SIM,
     skipCastCheck: false,
   });
 
-  // ===== 6. 宽松兜底 =====
+  // ===== 7. 宽松兜底 =====
   if (!winner) {
     console.log(`[IMDb→Vod] ⚠️ 严格模式无结果，启用宽松兜底...`);
     winner = pickBest(target, results, {
@@ -130,7 +160,7 @@ async function doResolve(imdbId, type, season, cacheKey) {
     return null;
   }
 
-  // ===== 7. 缓存 =====
+  // ===== 8. 缓存 =====
   const result = {
     vodId: winner.item.vodId,
     title: winner.item.vodName,
@@ -138,7 +168,7 @@ async function doResolve(imdbId, type, season, cacheKey) {
     imdbId,
     tmdbId: meta.tmdbId || null,
     season,
-    type: effectiveType,       // ★ 回报类型，方便 handler 判断
+    type: effectiveType,
   };
 
   await setCache(cacheKey, result, CACHE_TTL);
@@ -223,40 +253,66 @@ function pickBest(target, results, opts = {}) {
 }
 
 // ==========================================
-// 候选标题
+// 候选标题（条件化精简，P2-4 分层 2）
 // ==========================================
 
-async function collectCandidateTitles(meta, type) {
+/**
+ * 组装候选标题（纯同步，无网络）
+ *
+ * 策略：
+ *   - 纯中文/中文过半 ≥ 2 个 → 精简为「top-3 中文 + top-1 其他」
+ *   - 纯中文/中文过半 < 2 个 → 保留全量 top-6（原逻辑）
+ *
+ * 理由：
+ *   - 中文站点对中文标题收录率最高，多个中文候选命中后无需搜外文
+ *   - 中文稀缺时（如日剧/韩剧），保留外文兜底
+ *
+ * 效果示例：
+ *   "阿甘正传"  → [阿甘正传, 阿甘正傳, Forrest Gump]（3 个，原 6 个）
+ *   "3 Body Problem" → [三体, 3体, 3 Body Problem]（3 个，原 6 个）
+ *   "東京ラブストーリー"（只有 1 个中文名）→ 保留 6 个
+ *
+ * @param {Object} meta - TMDB/Cinemeta 元数据
+ * @param {string[]} altTitles - fetchAlternativeTitles 返回值
+ * @returns {string[]}
+ */
+function buildCandidateTitles(meta, altTitles) {
   const candidates = new Set();
 
   if (meta.title) candidates.add(meta.title.trim());
   if (meta.originalTitle && meta.originalTitle !== meta.title) {
     candidates.add(meta.originalTitle.trim());
   }
-
-  if (meta.tmdbId) {
-    try {
-      const altTitles = await fetchAlternativeTitles(meta.tmdbId, type);
-      for (const alt of altTitles) {
-        if (alt && alt.trim()) candidates.add(alt.trim());
-      }
-    } catch (err) {
-      console.warn(`[Candidates] 别名获取失败: ${err.message}`);
-    }
+  for (const alt of altTitles || []) {
+    if (alt && alt.trim()) candidates.add(alt.trim());
   }
 
   const sorted = [...candidates].sort(
     (a, b) => getTitlePriority(b) - getTitlePriority(a)
   );
 
-  const limited = sorted.slice(0, MAX_SEARCH_TITLES);
-  console.log(`[Candidates] 📋 ${limited.length} 个: ${limited.join(' | ')}`);
-  return limited;
+  const highPriority = sorted.filter(t => getTitlePriority(t) >= 2);
+  const others = sorted.filter(t => getTitlePriority(t) < 2);
+
+  let limited;
+  if (highPriority.length >= 2) {
+    // 中文丰富：3 中文 + 1 其他
+    limited = [...highPriority.slice(0, 3), ...others.slice(0, 1)];
+  } else {
+    // 中文稀缺：保留原逻辑（top-6 全量）
+    limited = sorted;
+  }
+
+  // ★ 保证主标题一定在结果里
+  if (meta.title && !limited.includes(meta.title.trim())) {
+    limited = [meta.title.trim(), ...limited];
+  }
+
+  return limited.slice(0, MAX_SEARCH_TITLES);
 }
 
 /**
- * 标题优先级：纯中文 > 中文为主 > 其他
- * 不构造"第X季"变体（避免稀释搜索）
+ * 标题优先级：纯中文 > 中文过半 > 其他
  */
 function getTitlePriority(title) {
   if (!title) return -1;
@@ -268,25 +324,55 @@ function getTitlePriority(title) {
 }
 
 // ==========================================
-// 多标题搜索（并行）
+// 多标题搜索（支持跳过主标题）
 // ==========================================
 
-async function searchWithMultipleTitles(candidateTitles) {
-  const allResults = [];
-  const seenIds = new Set();
-  const searchedTitles = [];
+/**
+ * 搜索多个候选标题
+ *
+ * 优化点：
+ *   - 支持传入 initialResults（主标题已搜过的结果，避免重复搜）
+ *   - 支持 skipKeyword（跳过已搜过的关键词）
+ *   - 保持并行搜索（不引入分批短路，行为与原版等价）
+ *
+ * @param {string[]} candidateTitles
+ * @param {Object} opts
+ * @param {string} [opts.skipKeyword]
+ * @param {Object[]} [opts.initialResults]
+ * @returns {Promise<{ results: Object[], searchedTitles: string[] }>}
+ */
+async function searchWithMultipleTitles(candidateTitles, opts = {}) {
+  const { skipKeyword, initialResults = [] } = opts;
 
-  const searchTasks = candidateTitles
-    .filter(k => k && k.length >= 2)
-    .map(async keyword => {
-      try {
-        const results = await searchVideos(keyword);
-        return { keyword, results: Array.isArray(results) ? results : [] };
-      } catch (err) {
-        console.warn(`[MultiSearch] "${keyword}" 失败: ${err.message}`);
-        return { keyword, results: [] };
-      }
-    });
+  const allResults = [...initialResults];
+  const seenIds = new Set(
+    initialResults.map(r => r.vodId).filter(Boolean)
+  );
+  const searchedTitles = skipKeyword ? [skipKeyword] : [];
+
+  // 过滤掉主标题（已搜过）
+  const remaining = candidateTitles.filter(
+    k => k && k.length >= 2 && k !== skipKeyword
+  );
+
+  if (remaining.length === 0) {
+    if (skipKeyword) {
+      console.log(
+        `[MultiSearch]   "${skipKeyword}"（已搜过）→ ${initialResults.length} 条`
+      );
+    }
+    return { results: allResults, searchedTitles };
+  }
+
+  const searchTasks = remaining.map(async keyword => {
+    try {
+      const results = await searchVideos(keyword);
+      return { keyword, results: Array.isArray(results) ? results : [] };
+    } catch (err) {
+      console.warn(`[MultiSearch] "${keyword}" 失败: ${err.message}`);
+      return { keyword, results: [] };
+    }
+  });
 
   const settled = await Promise.all(searchTasks);
 

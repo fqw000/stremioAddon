@@ -50,6 +50,10 @@
 - **JS 挑战求解** — 自动求解 555 站点的 MD5 暴力搜索挑战
 - **配置化开关** — 源开关、类型筛选、Stream 开关全部通过 URL 参数控制
 - **零依赖部署** — 无第三方依赖，仅用原生 `fetch`，一键部署到 Vercel
+<!-- 🔄 更新：新增 3 条稳定性/性能特性 -->
+- **并发请求去重** — `inflight` Map + 提前 set 占位，Stremio 一次搜索打 5 个分类只回源 1 次；meta/stream 同时请求只解析 1 次
+- **Meta 解析并发化** — 拉别名 ∥ 主标题搜索并行执行，配合候选标题条件精简（纯中文 ≥ 2 时 3+1，否则 6），TT 电影冷启动省 2-4s
+- **555 Stream 分批并行** — 4 个源分 2 批并行解析，避免 555 反爬风暴，同时把串行 4.2s 压到 3.9s
 
 ---
 
@@ -128,7 +132,8 @@ jpyyVecel/
 │   ├── rsc.js                # Next.js RSC 流解析
 │   ├── http.js               # HTTP 客户端（超时/重试/域名切换）
 │   └── helper.js             # 工具函数（Hash / Utils）
-├── health.js                 # 完整测试脚本（jpyy + 555）
+<!-- 🔄 更新：health.js 描述 -->
+├── health.js                 # 完整 E2E 冒烟测试（46 项，覆盖双源全接口）
 ├── vercel.json               # Vercel 路由配置
 ├── package.json
 └── README.md
@@ -412,9 +417,23 @@ GET /stream/:type/:id.json
 | **555 Stream** | 60s | 3 分钟 | 1 分钟 |
 | **555 挑战 cookie** | - | 400s | - |
 
+<!-- 🔄 更新：Redis 冷却机制改为 dev/生产对比 -->
 ### Redis 冷却降级机制
 
-当 Redis 连续 3 次响应超过 500ms 或失败时，进入 **60 秒冷却期**，期间仅使用内存缓存。
+当 Redis 连续多次慢响应或失败时进入冷却期，期间仅使用内存缓存。
+
+**阈值按环境自动区分**（`src/cache.js` 检测 `process.env.VERCEL_ENV`）：
+
+| 参数 | 生产 | 本地 dev |
+|------|------|---------|
+| 请求超时 | 800ms | 2000ms |
+| 慢响应阈值 | 500ms | 1500ms |
+| 冷却时间 | 60s | 15s |
+| 触发次数 | 3 次 | 5 次 |
+
+**原因**：从中国访问 Upstash 经常 700-800ms，本地 `vercel dev` 的网络栈更慢。生产环境的严格阈值在本地会频繁触发冷却，导致所有缓存失效。按环境区分后，本地开发不再被无意义的冷却打断。
+
+**空结果保护**：`fetchCatalog` / `fetchCatalog555` 解析失败或返回空数组时**不写入缓存**（避免 5 分钟内用户刷新全部空白页）。
 
 ---
 
@@ -484,6 +503,8 @@ sign = SHA1(MD5(sorted_params + "&key=" + SIGN_KEY + "&t=" + t))
 ③ 硬编码默认域名 555zxdy.cc
     ↓ 失败
 ④ 硬编码备用域名列表
+    ↓ 失败
+⑤ 发布页 zxdy91.com 动态提取（新增）
 ```
 
 **手动清空**：
@@ -502,23 +523,25 @@ TMDB 返回的标题往往是**英文原名**（如 `3 Body Problem`），而站
 
 ### 解决方案
 
-**四步走**：
+<!-- 🔄 更新：并发化 + 条件精简 -->
+**五步走**：
 
-1. **收集候选标题**：从 TMDB 拉取所有别名（`alternative_titles` API）
-2. **优先级排序**：纯中文 > 中文混合 > 原始标题 > 其他语言
-3. **多标题搜索**：逐个搜索站点，合并去重（最多 5 个候选）
+1. **并发拉取**：`Promise.all` 同时执行「拉别名」与「搜主标题」，省 ~2s
+2. **条件精简**：纯中文 ≥ 2 时只保留 3 中文 + 1 其他（原 6 个），减少搜索次数
+3. **多标题搜索**：并行搜索剩余候选，合并去重
 4. **多别名匹配**：对每个结果，计算与**所有候选标题**的最高相似度
+5. **季节识别**：优先用目标季播出年匹配（`seasonYear`），避免跨季混淆
 
 ### 效果示例
 
 **3 Body Problem**：
 
 ```
-[Candidates] 📋 5 个标题: 三体 | 3 Body Problem | 3体 | ...
-[MultiSearch]   "三体" → 24 条
+[IMDb→Vod] ⚡ 别名+主标题并发完成 624ms (alt=8, primary=24)
+[Candidates] 📋 4 个: 三体 | 3 Body Problem | 3体 | Three-Body
 [MultiSearch]   "3 Body Problem" → 24 条
 [MultiSearch]   "3体" → 24 条
-[IMDb→Vod] 📋 Total candidates: 52
+[IMDb→Vod] 📋 候选结果数: 52
 [SeasonMatch]   - "三体第一季（国语）" → season=1, sim=0.85
 [IMDb→Vod] ✅ Resolved: tt13016388 → vodId=103388
 ```
@@ -529,19 +552,20 @@ TMDB 返回的标题往往是**英文原名**（如 `3 Body Problem`），而站
 
 > ⚠️ **555 源为实验性支持，不纳入长期维护，后期可能随时删除。**
 
+<!-- 🔄 更新：补充多源合并 + 分批并行 -->
 ### 支持的功能
 
-| 功能 | 状态 |
-|------|------|
-| 分类浏览 | ✅ |
-| 详情解析 | ✅ |
-| 剧集列表（多源） | ✅ |
-| 播放地址解析 | ✅ |
-| 多源 Stream 聚合 | ✅ |
-| JS 挑战自动求解 | ✅ |
-| 搜索 | ❌（站点验证码限制） |
-| IMDb 映射 | ❌（依赖搜索） |
-| 域名动态追踪 | ❌（用硬编码 + 用户配置） |
+| 功能 | 状态 | 备注 |
+|------|------|------|
+| 分类浏览 | ✅ | |
+| 详情解析 | ✅ | |
+| 剧集列表（多源） | ✅ | 按集合并多源，Metadata 正确展示全部集数（如 467 集） |
+| 播放地址解析 | ✅ | |
+| 多源 Stream 聚合 | ✅ | **分批并行**（`BATCH=2`），兼顾速度与反爬 |
+| JS 挑战自动求解 | ✅ | |
+| 搜索 | ❌ | 站点验证码限制 |
+| IMDb 映射 | ❌ | 依赖搜索 |
+| 域名动态追踪 | ❌ | 硬编码 + 用户配置 |
 
 ### 技术特点
 
@@ -571,6 +595,15 @@ var C="5971483.31c722db25b288157883b1a012d3ada5",D=3,P="000";
 
 所有 555 缓存 key 带 `555:` 前缀，与 jpyy 完全隔离。
 
+<!-- 🔄 更新：新增 2 个技术特点 -->
+**4. Meta 剧集合集正确性**
+
+555 站点同一影片通常有多个源，早期实现只从第一个源读集数，导致部分剧集只显示 1 集。现已改为 `mergeEpisodesFromSources` 合并所有源后按集名去重，正确展示全部集数（如"宝岛西米乐" 6 个源合并后 467 集）。
+
+**5. Stream 分批并行**
+
+555 播放页有反爬机制，4 个源完全并发会触发拦截。改为 `BATCH=2`（每批 2 个并行，批间串行），实测 4 源耗时从 ~4.2s 压到 ~3.9s，且反爬安全。
+
 ### 未实现功能的原因
 
 | 功能 | 原因 |
@@ -597,6 +630,7 @@ npx vercel dev
 # 服务运行在 http://localhost:3000
 ```
 
+<!-- 🔄 更新：补充 STRICT 用法 + 测试覆盖范围 -->
 ### 运行测试脚本
 
 ```bash
@@ -608,7 +642,27 @@ BASE_URL=https://wangqifei0x00.eu.org node health.js
 
 # 跳过缓存测试
 SKIP_CACHE_TEST=1 node health.js
+
+# 严格模式：WARN 也算失败（CI 用）
+STRICT=1 node health.js
 ```
+
+### 测试覆盖范围（health.js）
+
+| 分组 | 覆盖点 |
+|------|--------|
+| **Manifest** | 默认配置、单源、分类筛选、边界兜底、stream 设计约束 |
+| **jpyy Catalog** | 5 类浏览、分页去重、搜索、并发去重（本地自动跳过） |
+| **555 Catalog** | 7 类浏览、无分页、无搜索 |
+| **Meta 类型正确性** | ★ 严格校验 `meta.type === 'movie' / 'series'`（能抓到历史 bug） |
+| **Meta videos 格式** | series 的 `videos[].id` 必须含 `:`，season/episode 为数字 |
+| **555 Meta 合集** | videos 数量 ≥ 源内最大集数（合并正确性） |
+| **Stream** | movie/series、555 多源、stream=false 源隔离 |
+| **响应头** | Content-Type / CORS / Cache-Control s-maxage |
+| **边界** | 非法 cfg / 空 cfg / 8KB cfg / 未知 catalogId / /configure |
+| **Debug** | 域名 / 缓存 / 555 状态字段完整性 |
+
+**本地环境**（`BASE_URL=localhost`）自动跳过 CDN HIT 断言，避免"缓存未生效"的误报。
 
 ### 查看日志
 
@@ -765,6 +819,28 @@ enabledSources = ['jpyy'];
 
 **Stremio 客户端不会被拦**（有正常的 User-Agent）。
 
+<!-- 🔄 更新：新增 Q9 -->
+### Q9：本地 `vercel dev` 里 inflight 并发去重完全不生效？
+
+**现象**：Stremio 一次搜索打 5 个分类，`vercel dev` 日志显示 5 个请求全部进入 `doSearchVideos`，`[Adapter] ⏳ 等待进行中的搜索` 0 次命中，5 个 HTTP 全打源站。
+
+**原因**：`vercel dev` 用 `@edge-runtime/vm` 为**每个请求新建独立 VM 上下文**（日志里每个请求都打一次 `[Cache] ✅ Upstash Redis 已启用` 就是证据 —— `redisLogPrinted` 也是实例级变量）。`searchInflight`、`inflight` 这些 `Map` 在**每个 VM 里独立**，跨请求不共享。
+
+**生产 Vercel Edge**：同一热 isolate 会复用，`Map` 共享，**P0-3 会正常生效**。
+
+**验证方式**：
+
+```bash
+# 部署到生产后访问
+curl "https://your-domain/catalog/movie/jinpai-movie/search=阿甘.json"
+curl "https://your-domain/catalog/series/jinpai-series/search=阿甘.json"
+# 看 Upstash 控制台：
+#   生产：search:阿甘 只写 1 次（5 分类共享 inflight）
+#   本地：search:阿甘 写 5 次（每 VM 独立）
+```
+
+**结论**：**本地无法验证 P0-3 效果，不是 bug**。依赖 Upstash 控制台的写入次数在生产环境验证。
+
 ---
 
 ## 技术栈
@@ -773,7 +849,8 @@ enabledSources = ['jpyy'];
 |----|------|
 | 运行时 | Vercel Edge Functions (V8 Isolate) |
 | 语言 | JavaScript (ES Module) |
-| 缓存 | Upstash Redis + Vercel CDN |
+| 缓存 | Upstash Redis + Vercel CDN（冷却阈值按环境自适应） |
+| 并发 | inflight Map 去重（生产 Edge 同 isolate 生效） |
 | 元数据 | TMDB API + Cinemeta |
 | 协议 | Stremio Addon SDK |
 | 依赖 | 零第三方依赖（仅原生 `fetch`） |
@@ -814,6 +891,16 @@ enabledSources = ['jpyy'];
   ├─ JS 挑战求解
   ├─ 多源 Stream 聚合
   └─ 源开关配置
+
+阶段 7 · 稳定性与性能（v1.2.0）
+  ├─ 空结果不污染缓存（fetchCatalog / fetchCatalog555）
+  ├─ Redis 冷却阈值按环境区分（dev 放宽，生产收紧）
+  ├─ 555 Meta 剧集合集合并（mergeEpisodesFromSources）
+  ├─ 555 Stream 修复 500 + 分批并行（BATCH=2）
+  ├─ searchVideos / resolveImdbToVod inflight 提前 set
+  ├─ Meta 解析并发化（拉别名 ∥ 主标题）
+  ├─ 候选标题条件精简（纯中文 ≥ 2 时 3+1）
+  └─ health.js 升级为完整 E2E 冒烟测试（46 项，本地自动跳过 CDN 断言）
 ```
 
 ---

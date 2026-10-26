@@ -105,7 +105,7 @@ function buildConfig() {
       'x8kb9k8.com',
       'jpyy5.com'
     ].filter(Boolean),
-    
+
     // ===== 源开关（新增）=====
     ENABLED_SOURCES: enabledSources,
     ENABLE_JPYY: enabledSources.includes('jpyy'),
@@ -163,7 +163,12 @@ export function getConfig() {
   if (!_configCache || key !== _configCacheKey) {
     _configCache = buildConfig();
     _configCacheKey = key;
-    console.log(`[Config] 🔄 配置已更新: ${key}`);
+    // console.log(`[Config] 🔄 配置已更新: ${key}`);
+    // ★ 只有非空配置才打日志，避免 isolate 隔离导致刷屏
+    if (key !== '{}') {
+      console.log(`[Config] 🔄 配置已更新: ${key}`);
+    }
+
   }
 
   return _configCache;

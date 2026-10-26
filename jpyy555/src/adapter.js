@@ -25,20 +25,20 @@ const searchInflight = new Map();
 
 export const CATALOG_TYPE_MAP = {
   // ===== 完整 ID（manifest 声明）=====
-  'jinpai-movie':   { typeId: 1,  typeIds: [], itemType: 'movie' },
-  'jinpai-series':  { typeId: 2,  typeIds: [14, 15, 16, 62, 68], itemType: 'series' },
-  'jinpai-variety': { typeId: 3,  typeIds: [69, 70, 72, 73], itemType: 'series' },
+  'jinpai-movie': { typeId: 1, typeIds: [], itemType: 'movie' },
+  'jinpai-series': { typeId: 2, typeIds: [14, 15, 16, 62, 68], itemType: 'series' },
+  'jinpai-variety': { typeId: 3, typeIds: [69, 70, 72, 73], itemType: 'series' },
   // ★ 给动漫增加自定义 path 模板
-  'jinpai-anime':   { typeId: 4,  typeIds: [75, 76, 77], itemType: 'series', path: '/vod/show/id/4/sort/4/sortBy/1/page/{page}' },
-  'jinpai-short':   { typeId: 88, typeIds: [], itemType: 'series' },
+  'jinpai-anime': { typeId: 4, typeIds: [75, 76, 77], itemType: 'series', path: '/vod/show/id/4/sort/4/sortBy/1/page/{page}' },
+  'jinpai-short': { typeId: 88, typeIds: [], itemType: 'series' },
 
   // ===== 简写别名（兼容 Stremio 客户端特殊请求）=====
-  'movie':   { typeId: 1,  typeIds: [], itemType: 'movie' },
-  'series':  { typeId: 2,  typeIds: [14, 15, 16, 62, 68], itemType: 'series' },
-  'variety': { typeId: 3,  typeIds: [69, 70, 72, 73], itemType: 'series' },
+  'movie': { typeId: 1, typeIds: [], itemType: 'movie' },
+  'series': { typeId: 2, typeIds: [14, 15, 16, 62, 68], itemType: 'series' },
+  'variety': { typeId: 3, typeIds: [69, 70, 72, 73], itemType: 'series' },
   // ★ 简写别名也同步加上
-  'anime':   { typeId: 4,  typeIds: [75, 76, 77], itemType: 'series', path: '/vod/show/id/4/sort/4/sortBy/1/page/{page}' },
-  'short':   { typeId: 88, typeIds: [], itemType: 'series' },
+  'anime': { typeId: 4, typeIds: [75, 76, 77], itemType: 'series', path: '/vod/show/id/4/sort/4/sortBy/1/page/{page}' },
+  'short': { typeId: 88, typeIds: [], itemType: 'series' },
 };
 
 // ==========================================
@@ -134,6 +134,7 @@ export async function fetchCatalog(catalogId, skip = 0) {
   const list = parseCatalog(text);
   if (!Array.isArray(list)) {
     console.warn(`[Adapter] ⚠️ parseCatalog 返回非数组`);
+    // 解析失败：返回空但不写 L2 缓存，下次请求会重试
     return [];
   }
 
@@ -150,7 +151,21 @@ export async function fetchCatalog(catalogId, skip = 0) {
     vodPubdate: item.vodPubdate || '',
   }));
 
-  await setCache(cacheKey, result, 300);
+  // await setCache(cacheKey, result, 300);
+  // ★ 空结果分流处理，避免污染缓存
+  if (result.length === 0) {
+    if (skip === 0) {
+      // 首屏为空：可能站点异常，短 TTL 让下次快速重试
+      await setCache(cacheKey, result, 30);
+      console.warn(`[Adapter] ⚠️ skip=0 返回空，短缓存 30s`);
+    } else {
+      // 非首屏为空：大概率异常，不写缓存
+      console.warn(`[Adapter] ⚠️ skip=${skip} 返回空，可能异常，跳过缓存`);
+    }
+  } else {
+    await setCache(cacheKey, result, 300);
+  }
+
   return result;
 }
 
@@ -198,6 +213,7 @@ export async function fetchDetail(vodId) {
     vodSerial: detail.vodSerial?.trim() || '',
     vodTotal,
     vodSeries: vodTotal > 0 ? 1 : 0,
+    typeId1: detail.typeId1 != null ? parseInt(detail.typeId1, 10) : null,
     episodes,
   };
 
@@ -360,24 +376,20 @@ export async function searchVideos(keyword, page = 1, pageSize = 24) {
   const cleanKeyword = (keyword || '').trim().toLowerCase();
   const cacheKey = `search:${cleanKeyword}:${page}:${pageSize}`;
 
-  // ★ 优化：优先检查是否已有相同的搜索正在进行
-  // 因为 Stremio/Nuvio 会同时发起 5 个分类的搜索请求，
-  // 这里直接拦截，让后 4 个请求连 Redis 都不用查，直接在内存等待。
+  // ★ 必须在 await 之前同步检查 + 同步 set
   if (searchInflight.has(cacheKey)) {
-    console.log(`[Adapter] ⏳ 等待进行中的搜索（免查缓存）: "${keyword}"`);
+    console.log(`[Adapter] ⏳ 等待进行中的搜索: "${keyword}"`);
     return searchInflight.get(cacheKey);
   }
 
-  // 如果没有正在进行的同词搜索，再查缓存
-  const cached = await getCache(cacheKey);
-  if (cached) {
-    console.log(`[Adapter] ✅ Search 缓存命中: "${keyword}" (${cached.length} 条)`);
-    return cached;
-  }
-
-  // 发起真正的请求，并记录到 inflight
-  const promise = doSearchVideos(cleanKeyword, keyword, page, pageSize, cacheKey)
-    .finally(() => searchInflight.delete(cacheKey));
+  const promise = (async () => {
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      console.log(`[Adapter] ✅ Search 缓存命中: "${keyword}" (${cached.length} 条)`);
+      return cached;
+    }
+    return doSearchVideos(cleanKeyword, keyword, page, pageSize, cacheKey);
+  })().finally(() => searchInflight.delete(cacheKey));
 
   searchInflight.set(cacheKey, promise);
   return promise;

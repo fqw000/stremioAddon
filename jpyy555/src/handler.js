@@ -21,6 +21,7 @@ import { searchTmdbByTitle, fetchSeasonThumbnails } from './tmdb.js';
 import { probeAndUpdate, getDomainStatus, clearDomainCache } from './domain-resolver.js';
 import { getCache, setCache } from './cache.js';
 import { fetchCatalog555, fetchDetail555, fetchEpisodes555, fetchStream555 } from './adapter-555.js';
+import { mergeEpisodesFromSources } from './adapter-555.js';
 
 // ==========================================
 // TMDB 缓存（改为 Redis）
@@ -440,7 +441,14 @@ async function handleMeta(routeType, rawEncodedId) {
   }
 
   // const isSeries = detail.vodTotal > 0 || routeType === 'series' || parsed.hasSeasonEpisode;
-  const isSeries = detail.typeId1 !== 1;
+  let isSeries;
+  if (detail.typeId1 != null) {
+    isSeries = detail.typeId1 !== 1;
+  } else {
+    const numericEps = (detail.episodes || [])
+      .filter(ep => /^\d+$/.test(String(ep.name || '').trim()));
+    isSeries = numericEps.length > 1;
+  }
   const metaId = parsed.source === 'imdb' ? parsed.imdbId : `jp${parsed.vodId}`;
 
   // ===== 构建 Meta =====
@@ -583,10 +591,10 @@ async function handleMeta555(routeType, parsed) {
   // ===== 剧集：从 detail.sources 中合并出集数 =====
   // 这里不需要多源信息，只要知道有多少集、每集的 nid 即可
   // 为了保持 meta.videos 的 id 格式，我们从第一个源里取集列表
-  const firstSource = (detail.sources || [])[0];
-  if (firstSource && firstSource.episodes.length > 0) {
-    const fallbackThumbnail = detail.vodPic || '';
-    meta.videos = firstSource.episodes.map((ep, index) => ({
+  const merged = mergeEpisodesFromSources(detail.sources || []);
+  const fallbackThumbnail = detail.vodPic || '';
+  if (merged.length > 0) {
+    meta.videos = merged.map((ep, index) => ({
       id: `dy555${parsed.vodId}:1:${index + 1}`,
       season: 1,
       episode: index + 1,
@@ -597,6 +605,7 @@ async function handleMeta555(routeType, parsed) {
   } else {
     meta.videos = [];
   }
+  console.log(`[Meta 555] 📺 合并 ${detail.sources.length} 个源 → ${meta.videos.length} 集`);
 
   console.log(`[Meta 555] ✅ Built series: "${meta.name}", videos=${meta.videos.length}`);
   return jsonResponse({ meta }, 600);
@@ -772,22 +781,23 @@ async function handleStream555(routeType, parsed) {
 
   // ===== 3. 找目标集 =====
   let targetEp = null;
-
-  if (episode > 0) {
-    // 优先按集名中的数字匹配
+  if (routeType === 'movie') {
+    targetEp = episodes[0];
+  } else {
     targetEp = episodes.find(ep => {
       const m = String(ep.name).match(/(\d+)/);
       return m && parseInt(m[1], 10) === episode;
     });
-
-    // 兜底：按索引
     if (!targetEp && episode <= episodes.length) {
       targetEp = episodes[episode - 1];
       console.log(`[555 Stream] ⚠️ 数字匹配失败，按索引取第 ${episode} 项`);
     }
+    if (!targetEp) {
+      targetEp = episodes[0];
+      console.log(`[555 Stream] ⚠️ 使用第一集: ${targetEp.name}`);
+    }
   }
 
-  // 最终兜底：取第一集（电影场景）
   if (!targetEp) {
     targetEp = episodes[0];
     console.log(`[555 Stream] ⚠️ 使用第一集: ${targetEp.name}`);
@@ -797,19 +807,30 @@ async function handleStream555(routeType, parsed) {
     `[555 Stream] 🎯 Target: name="${targetEp.name}", sources=${targetEp.sources.length}`
   );
 
-  // ===== 4. 为每个源获取流 =====
+  // ===== 4. 分批并行获取流（★ 每个 sid 只调 1 次）=====
+  const BATCH = 2;
   const allStreams = [];
 
-  for (const src of targetEp.sources) {
-    try {
-      const urls = await fetchStream555(vodId, src.sid, src.nid);
+  for (let i = 0; i < targetEp.sources.length; i += BATCH) {
+    const batch = targetEp.sources.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(async src => {
+        try {
+          return { src, urls: await fetchStream555(vodId, src.sid, src.nid) };
+        } catch (err) {
+          console.warn(`[555 Stream] ⚠️ 源 ${src.sid} (${src.sourceName}) 失败: ${err.message}`);
+          return { src, urls: [] };
+        }
+      })
+    );
+
+    // ===== 5. 按源顺序组装 + 过滤 IP =====
+    for (const { src, urls } of results) {
       for (const s of urls) {
-        // ★ 过滤含 IP 的 URL
         if (CONFIG.ENABLE_BAN_IP && isIpUrl(s.url)) {
           console.log(`[555 Stream] 🚫 过滤 IP 链接: ${s.url}`);
           continue;
         }
-
         const isHls = s.url.includes('.m3u8');
         allStreams.push({
           name: displayName,
@@ -822,139 +843,135 @@ async function handleStream555(routeType, parsed) {
           ...(isHls && { type: 'hls' }),
         });
       }
-    } catch (err) {
-      console.warn(`[555 Stream] ⚠️ 源 ${src.sid} (${src.sourceName}) 失败: ${err.message}`);
     }
   }
 
+  // ===== 6. 判空返回（★ 必须有）=====
   if (allStreams.length === 0) {
     console.log(`[555 Stream] ⚠️ 所有源都失败`);
     return jsonResponse({ streams: [] });
   }
 
-  // ===== 5. 按源顺序排序（线路1 在前）=====
-  // allStreams 已经按 targetEp.sources 的顺序生成，无需再排
-
   console.log(
     `[555 Stream] ✅ Returning ${allStreams.length} streams（来自 ${targetEp.sources.length} 个源）`
   );
-  return jsonResponse({ streams: allStreams }, 60);
+  return jsonResponse({ streams: allStreams }, 60);   // ★★★ 最关键的一行 ★★★
 }
 
-// ==========================================
-// Search 处理（兼容独立接口）
-// ==========================================
+  // ==========================================
+  // Search 处理（兼容独立接口）
+  // ==========================================
 
-async function handleSearch(query) {
-  console.log(`[Search] 🔍 Query: "${query}"`);
-  const items = await searchVideos(query);
+  async function handleSearch(query) {
+    console.log(`[Search] 🔍 Query: "${query}"`);
+    const items = await searchVideos(query);
 
-  const results = items.map(item => {
-    const isSeries = item.typeId1 !== 1;
-    const id = `jp${item.vodId}`;
-    return {
-      id,
-      type: isSeries ? 'series' : 'movie',
-      name: item.vodName,
-      poster: item.vodPic || '',
-      year: item.vodYear ? String(item.vodYear) : '',
-    };
-  });
+    const results = items.map(item => {
+      const isSeries = item.typeId1 !== 1;
+      const id = `jp${item.vodId}`;
+      return {
+        id,
+        type: isSeries ? 'series' : 'movie',
+        name: item.vodName,
+        poster: item.vodPic || '',
+        year: item.vodYear ? String(item.vodYear) : '',
+      };
+    });
 
-  console.log(`[Search] ✅ Returning ${results.length} results`);
-  return jsonResponse({ results }, 300);
-}
-
-// ==========================================
-// 辅助函数
-// ==========================================
-
-/**
- * 判断 URL 的主机名是否为 IPv4 或 IPv6
- */
-function isIpUrl(url) {
-  if (!url) return false;
-  try {
-    const host = new URL(url).hostname;
-    // 匹配 IPv4
-    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return true;
-    // 匹配 IPv6 (Node/V8 会返回带方括号的 host，或者用冒号判断)
-    if (host.includes(':') || (host.startsWith('[') && host.endsWith(']'))) return true;
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-
-
-function jsonResponse(data, cacheSeconds = 0) {
-  const headers = {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-  };
-
-  if (cacheSeconds > 0) {
-    headers['Cache-Control'] = `public, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`;
-  } else {
-    headers['Cache-Control'] = 'public';
+    console.log(`[Search] ✅ Returning ${results.length} results`);
+    return jsonResponse({ results }, 300);
   }
 
-  return new Response(JSON.stringify(data, null, 2), { headers });
-}
+  // ==========================================
+  // 辅助函数
+  // ==========================================
 
-/**
- * 格式化 stream 的 name 字段
- *
- * 格式：
- *   电影：{影片名称} [ {完整ID} ]
- *   剧集：{影片名称} [ {完整ID} · S{SS}E{EE} ]
- *
- * 说明：
- *   - 完整 ID 是用户请求时的原始 ID（tt/jp/dy555 前缀）
- *   - movie 类型不加 S/E 信息（单集场景）
- *   - series 类型 S/E 补零到两位
- *
- * @param {string} movieName - 影片名称
- * @param {string} fullId - 完整 ID（含前缀）
- * @param {string} routeType - 'movie' 或 'series'
- * @param {number} season - 季（series 用）
- * @param {number} episode - 集（series 用）
- * @returns {string}
- */
-function formatStreamName(movieName, fullId, routeType, season = 1, episode = 1) {
-  if (routeType === 'movie') {
-    return `${movieName} [ ${fullId} ]`;
-  }
-  const ss = String(season).padStart(2, '0');
-  const ee = String(episode).padStart(2, '0');
-  return `${movieName} [ ${fullId} · S${ss}E${ee} ]`;
-}
-
-//  ==========================================
-// Base64 URL 解码（兼容 Node.js 和浏览器）
-//  ==========================================
-function decodeBase64Url(str) {
-  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  if (typeof atob === 'function') {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
+  /**
+   * 判断 URL 的主机名是否为 IPv4 或 IPv6
+   */
+  function isIpUrl(url) {
+    if (!url) return false;
+    try {
+      const host = new URL(url).hostname;
+      // 匹配 IPv4
+      if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return true;
+      // 匹配 IPv6 (Node/V8 会返回带方括号的 host，或者用冒号判断)
+      if (host.includes(':') || (host.startsWith('[') && host.endsWith(']'))) return true;
+      return false;
+    } catch (e) {
+      return false;
     }
-    return new TextDecoder('utf-8').decode(bytes);
   }
-  // Node.js
-  return Buffer.from(base64, 'base64').toString('utf-8');
-}
 
-// ==========================================
-// Cloudflare Workers 入口
-// ==========================================
 
-export default {
-  async fetch(request, env, ctx) {
-    return await handleRequest(request, env, ctx);
-  },
-};
+  function jsonResponse(data, cacheSeconds = 0) {
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+    };
+
+    if (cacheSeconds > 0) {
+      headers['Cache-Control'] = `public, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 2}`;
+    } else {
+      headers['Cache-Control'] = 'public';
+    }
+
+    return new Response(JSON.stringify(data, null, 2), { headers });
+  }
+
+  /**
+   * 格式化 stream 的 name 字段
+   *
+   * 格式：
+   *   电影：{影片名称} [ {完整ID} ]
+   *   剧集：{影片名称} [ {完整ID} · S{SS}E{EE} ]
+   *
+   * 说明：
+   *   - 完整 ID 是用户请求时的原始 ID（tt/jp/dy555 前缀）
+   *   - movie 类型不加 S/E 信息（单集场景）
+   *   - series 类型 S/E 补零到两位
+   *
+   * @param {string} movieName - 影片名称
+   * @param {string} fullId - 完整 ID（含前缀）
+   * @param {string} routeType - 'movie' 或 'series'
+   * @param {number} season - 季（series 用）
+   * @param {number} episode - 集（series 用）
+   * @returns {string}
+   */
+  function formatStreamName(movieName, fullId, routeType, season = 1, episode = 1) {
+    if (routeType === 'movie') {
+      return `${movieName} [ ${fullId} ]`;
+    }
+    const ss = String(season).padStart(2, '0');
+    const ee = String(episode).padStart(2, '0');
+    return `${movieName} [ ${fullId} · S${ss}E${ee} ]`;
+  }
+
+  //  ==========================================
+  // Base64 URL 解码（兼容 Node.js 和浏览器）
+  //  ==========================================
+  function decodeBase64Url(str) {
+    const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    if (typeof atob === 'function') {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+    // Node.js
+    return Buffer.from(base64, 'base64').toString('utf-8');
+  }
+
+  // ==========================================
+  // Cloudflare Workers 入口
+  // ==========================================
+
+  export default {
+    async fetch(request, env, ctx) {
+      return await handleRequest(request, env, ctx);
+    },
+  };
 
 
