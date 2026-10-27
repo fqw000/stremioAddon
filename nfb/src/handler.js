@@ -29,7 +29,7 @@ export async function handleRequest(request) {
 
   console.log(`[Worker] 📨 ${request.method} ${pathname}${url.search}`);
 
-  if (pathname === '/manifest.json') {
+  if (pathname === '/' | pathname === '/manifest.json') {
     const m = getManifest();
     console.log(`[Manifest] ✅ 返回 ${m.catalogs.length} 个目录`);
     return jsonResponse(m, 0);
