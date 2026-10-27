@@ -303,7 +303,7 @@ export function renderConfigurePage(defaultConfig) {
 <div class="container">
   <div class="header">
     <img src="/favicon.ico" alt="Logo" onerror="this.style.display='none'">
-    <h1>@vyla-entertainment/sd</h1>
+    <h1>只提供Stream 和中英文subtitles 。@vyla-entertainment/sd</h1>
   </div>
 
   <!-- 功能开关 -->
@@ -394,6 +394,7 @@ export function renderConfigurePage(defaultConfig) {
 <div class="footer">
   <button class="install-btn" onclick="installToStremio()">安装到 Stremio</button>
   <div class="domain-text">wangqifei.eu.org</div>
+  <div><img src="https://visitor-badge.laobi.icu/badge?page_id=vYlaStremioAddon;left_text=Visitors" alt="Visitors"></div>
 </div>
 
 <script>
