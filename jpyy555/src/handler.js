@@ -115,7 +115,7 @@ export async function handleRequest(request, env, ctx) {
   console.log(`[Worker] 📨 ${request.method} ${pathname}${url.search}`);
 
   // ===== 1. Manifest =====
-  if (pathname === '/manifest.json') {
+  if (pathname=== '/' | pathname === '/manifest.json') {
     // 读取配置
     const enabledCategories = CONFIG.ENABLED_CATEGORIES || ['movie', 'series', 'variety', 'anime', 'short'];
     const enableStream = CONFIG.ENABLE_STREAM !== false;
