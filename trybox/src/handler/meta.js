@@ -117,13 +117,14 @@ export async function getMeta(env, headers, tryboxType, tmdbId) {
       const url = `${TRYBOX_URLS.meta}?payload=${encodeURIComponent(JSON.stringify(payload))}`;
       const raw = await getText(url, headers);
       const decoded = decodeNode(JSON.parse(raw));
-      return decoded.result || null;
+      return decoded.result || { __null: true };   // ← 关键：哨兵
     },
-    shouldCache: (v) => v !== null,
+    shouldCache: () => true,                        // ← 关键：true
   });
   log.info(`Meta ${fromCache ? '命中缓存' : '回源'}: ${tryboxType}/${tmdbId}`);
-  return value;
+  return value && value.__null ? null : value;      // ← 关键：解包
 }
+
 
 /**
  * 获取单季 episodes（内部用，不缓存）

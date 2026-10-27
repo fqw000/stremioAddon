@@ -79,11 +79,11 @@ export async function subtitleHandler({ type, id, config, env }) {
   // 字幕语言偏好：'zh' | 'en' | 'zh-en'
   const subLang = config.subtitleLang || 'zh-en';
 
-  // 传给 API 的 language 参数
+  // // 传给 API 的 language 参数
   let apiLang = null;
   if (subLang === 'zh') apiLang = 'zh-CN';
   else if (subLang === 'en') apiLang = 'en';
-
+// zh-en 保持 null（全量，本地过滤）
   const subs = await fetchSubtitles(env, headers, imdbId, apiLang);
 
   const result = [];
@@ -94,13 +94,21 @@ export async function subtitleHandler({ type, id, config, env }) {
     if (subLang === 'zh' && normalizedLang !== 'zh') continue;
     if (subLang === 'en' && normalizedLang !== 'en') continue;
 
+    const TRYBOX_BASE = 'https://trybox.app';
+
+    function toAbsoluteUrl(raw) {
+      if (!raw) return '';
+      if (/^https?:\/\//.test(raw)) return raw;
+      return `${TRYBOX_BASE}${raw.startsWith('/') ? raw : '/' + raw}`;
+    }
+
     result.push({
       id: s.id || `trybox_${imdbId}_${result.length}`,
-      url: s.url,
+      url: toAbsoluteUrl(s.url),
       lang: normalizedLang,
     });
   }
 
-  log.info(`返回 ${result.length} 条字幕（subLang=${subLang}）`);
+  log.info(`返回 ${result.length}/${subs.length} 条字幕（subLang=${subLang}）`);
   return { subtitles: result };
 }

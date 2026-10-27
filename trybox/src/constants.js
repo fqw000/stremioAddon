@@ -93,13 +93,13 @@ export const TTL = {
 
   // Search
   SEARCH_L1: 60,
-  SEARCH_REDIS: 600,
+  SEARCH_REDIS: 1800,
   SEARCH_CDN: 300,
 
   // Subtitle
   SUBTITLE_L1: 60,
-  SUBTITLE_REDIS: 600,
-  SUBTITLE_CDN: 300,
+  SUBTITLE_REDIS: 86400,
+  SUBTITLE_CDN: 3600,
 
   // Stream
   STREAM_L1: 60,

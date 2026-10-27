@@ -183,80 +183,75 @@ async function sendBarkAlert(barkKey, title, body) {
  * 获取有效的 access_token
  */
 export async function getAccessToken(env, prefix, userConfig = {}) {
-  // ─── 步骤 1：检查内存缓存 ───
+  // ─── ① 内存 ───
   if (memoryTokens && isAccessValid(memoryTokens.access)) {
-    const remain = Math.round((memoryTokens.accessExp - Date.now()) / 60000);
-    log.info(`使用内存缓存的 access_token（剩余 ${remain} 分钟）`);
     return memoryTokens.access;
   }
 
-  // ─── 步骤 2：检查用户配置的 access_token ───
-  if (userConfig.accessToken && isAccessValid(userConfig.accessToken)) {
-    const exp = decodeJwtExpiry(userConfig.accessToken);
-    const remain = exp ? Math.round((exp - Date.now()) / 60000) : '未知';
-    log.info(`使用用户配置的 access_token（剩余 ${remain} 分钟）`);
-    memoryTokens = {
-      access: userConfig.accessToken,
-      refresh: userConfig.refreshToken || null,
-      accessExp: exp || Date.now() + 3600_000,
-    };
-    return userConfig.accessToken;
-  }
-
-  // ─── 步骤 3：读 Redis ───
+  // ─── ② Redis（主数据源，工作流滚动的）───
   const stored = await readToken(env, prefix);
   if (stored.access && isAccessValid(stored.access)) {
     const exp = decodeJwtExpiry(stored.access);
     const remain = Math.round((exp - Date.now()) / 60000);
-    log.info(`使用 Redis 中的 access_token（剩余 ${remain} 分钟）`);
-    memoryTokens = {
-      access: stored.access,
-      refresh: stored.refresh,
-      accessExp: exp,
-    };
+    log.info(`使用 Redis access_token（剩余 ${remain} 分钟）`);
+    memoryTokens = { access: stored.access, refresh: stored.refresh, accessExp: exp };
     return stored.access;
   }
 
-  // ─── 步骤 4：用 refresh_token 刷新 ───
-  const refreshToken = userConfig.refreshToken || stored.refresh;
+  // ─── ③ 用户配置 at（兜底），写回 Redis 但**只写 access，不写 refresh** ───
+  if (userConfig.accessToken && isAccessValid(userConfig.accessToken)) {
+    const exp = decodeJwtExpiry(userConfig.accessToken);
+    log.info(`使用用户配置 access_token（写回 Redis，不写 refresh）`);
+    memoryTokens = {
+      access: userConfig.accessToken,
+      refresh: stored.refresh,        // ← 保留 Redis 里的 refresh
+      accessExp: exp,
+    };
+    if (upstashUrl(env)) {
+      try {
+        await redisPipeline(env, [
+          ['SET', `${prefix}:token:access`, JSON.stringify(userConfig.accessToken), 'EX', 3600],
+          // ⚠️ 不写 refresh：用户传的可能是旧快照，会污染工作流滚动的 R
+        ]);
+        log.info('用户配置 access_token 已写回 Redis');
+      } catch (e) {
+        log.warn('写回 Redis 失败:', e.message);
+      }
+    }
+    return userConfig.accessToken;
+  }
+
+  // ─── ④ 用 refresh_token 刷新（优先 Redis 的）───
+  const refreshToken = stored.refresh || userConfig.refreshToken;
   if (refreshToken) {
-    log.info('尝试用 refresh_token 刷新...');
     try {
       const result = await refreshWithRefreshToken(refreshToken);
       await writeToken(env, prefix, result.accessToken, result.refreshToken);
       log.info('✅ refresh_token 刷新成功');
       return result.accessToken;
     } catch (e) {
-      log.warn('refresh_token 刷新失败:', e.message);
+      log.warn('refresh 失败:', e.message);
     }
-  } else {
-    log.warn('无可用 refresh_token，跳过刷新');
   }
 
-  // ─── 步骤 5：用旧的 access_token 刷新（降级）───
-  const oldAccess = stored.access || userConfig.accessToken;
-  if (oldAccess) {
-    log.info('尝试用旧 access_token 刷新...');
+  // ─── ⑤ 用用户配置的 refresh_token 刷新（降级，与 ④ 不同才试）───
+  const userRefresh = userConfig.refreshToken;
+  if (userRefresh && userRefresh !== refreshToken) {
     try {
-      const result = await refreshWithRefreshToken(oldAccess);
+      const result = await refreshWithRefreshToken(userRefresh);
       await writeToken(env, prefix, result.accessToken, result.refreshToken);
-      log.info('✅ access_token 刷新成功');
+      log.info('✅ 用户配置 refresh 刷新成功');
       return result.accessToken;
     } catch (e) {
-      log.warn('access_token 刷新失败:', e.message);
+      log.warn('用户配置 refresh 失败:', e.message);
     }
   }
 
-  // ─── 步骤 6：全部失败 → Bark 告警 ───
-  log.error('❌ 所有 Token 刷新方式均失败');
-  await sendBarkAlert(
-    env.BARK_KEY,
-    'TryBox Token失效',
-    `access_token 和 refresh_token 均已失效，请手动更新。项目:${prefix}`
-  );
-
+  // ─── ⑥ Bark 告警 ───
+  await sendBarkAlert(env.BARK_KEY, 'TryBox Token失效', `所有刷新失败: prefix=${prefix}`);
   return userConfig.accessToken || '';
 }
+
 
 /** 清除内存缓存（用于测试） */
 export function clearTokenCache() {

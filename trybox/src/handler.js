@@ -126,5 +126,6 @@ function sanitizeConfig(cfg) {
   const c = { ...cfg };
   if (c.refreshToken) c.refreshToken = c.refreshToken.slice(0, 4) + '***';
   if (c.accessToken) c.accessToken = c.accessToken.slice(0, 4) + '***';
+  if (c.tmdbKey) c.tmdbKey = c.tmdbKey.slice(0, 4) + '***';
   return c;
 }

@@ -3,9 +3,14 @@
  *
  * 规则：
  *   - 4xx：不重试
- *   - 5xx：重试 RETRY_COUNT 次
+ *   - 5xx：重试 retryCount 次
  *   - 网络异常：重试
- *   - 超时：AbortError 不重试
+ *   - 超时：AbortError 不重试（走 pending / 负缓存兜底）
+ *
+ * per-call options（第 3/4 参数）：
+ *   - retryCount: number  默认 RETRY_COUNT
+ *   - timeoutMs:  number  默认 REQUEST_TIMEOUT
+ *   - 兼容旧签名：直接传 number 视为 retryCount
  */
 
 import { createLogger } from './logger.js';
@@ -15,9 +20,14 @@ const REQUEST_TIMEOUT = 15000;
 const RETRY_COUNT = 2;
 const RETRY_DELAY = 500;
 
-async function fetchWithTimeout(url, options = {}) {
+function normalizeOptions(options) {
+  if (typeof options === 'number') return { retryCount: options };
+  return options || {};
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
@@ -28,11 +38,12 @@ async function fetchWithTimeout(url, options = {}) {
 /**
  * GET 请求，返回 text
  */
-export async function getText(url, headers = {}, retryCount = RETRY_COUNT) {
+export async function getText(url, headers = {}, options = {}) {
+  const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
-      const res = await fetchWithTimeout(url, { method: 'GET', headers });
+      const res = await fetchWithTimeout(url, { method: 'GET', headers }, timeoutMs);
       if (!res.ok) {
         if (res.status >= 400 && res.status < 500) {
           throw new Error(`HTTP ${res.status} 不重试`);
@@ -55,7 +66,8 @@ export async function getText(url, headers = {}, retryCount = RETRY_COUNT) {
 /**
  * POST 请求（JSON body），返回 text
  */
-export async function postText(url, body, headers = {}, retryCount = RETRY_COUNT) {
+export async function postText(url, body, headers = {}, options = {}) {
+  const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
@@ -66,7 +78,7 @@ export async function postText(url, body, headers = {}, retryCount = RETRY_COUNT
           ...headers,
         },
         body: typeof body === 'string' ? body : JSON.stringify(body),
-      });
+      }, timeoutMs);
       if (!res.ok) {
         if (res.status >= 400 && res.status < 500) {
           throw new Error(`HTTP ${res.status} 不重试`);
@@ -87,7 +99,7 @@ export async function postText(url, body, headers = {}, retryCount = RETRY_COUNT
 }
 
 /**
- * POST JSON（返回 text），供 token.js 使用
+ * POST JSON（返回 text），供 token.js 使用（简化版，不重试）
  */
 export async function postJson(url, body, headers = {}) {
   const res = await fetchWithTimeout(url, {

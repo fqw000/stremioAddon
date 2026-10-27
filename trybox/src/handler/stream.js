@@ -8,7 +8,17 @@
  * 缓存：
  *   - stream:{kind}:{tmdbId}（movie）
  *   - stream:tv:{tmdbId}:{S}:{E}（series）
- *   - 空结果 → negative cache: stream:neg:*（300s）
+ *
+ * 失败处理（统一 failWithPending）：
+ *   - 第一次失败 → pending (120s) + 返回诊断
+ *   - 第二次失败 → 负缓存 (60s/300s) + 返回诊断
+ *   - 命中负缓存 → 直接返回诊断
+ *
+ *   失败分类：
+ *   - no_valid_url  上游 200 但 0 条有效链接    → 负缓存 300s
+ *   - http_failed   请求超时 / 5xx / 网络异常   → 负缓存 60s
+ *   - decode_failed 解码 / 结构异常             → 负缓存 60s
+ *   - token_failed / no_token / invalid_id      → 不写 pending（全局问题，避免误伤）
  */
 
 import { createLogger } from '../logger.js';
@@ -18,7 +28,7 @@ import { buildStreamHeaders } from '../headers.js';
 import { decodeNode } from '../decode.js';
 import { postText } from '../http.js';
 import { getAccessToken } from '../token.js';
-import { getCache, setCache } from '../cache.js';
+import { getCache, setCache, delCache } from '../cache.js';
 import { parseAnyId } from '../tmdb.js';
 
 const log = createLogger('Stream');
@@ -31,6 +41,10 @@ const QUALITY_ORDER = {
   AUTO: 4,
   ORG: 5,
 };
+
+// 负缓存 TTL
+const NEG_TTL_EMPTY = TTL.STREAM_NEG_REDIS; // 300s：上游明确返回 0 条
+const NEG_TTL_FAILED = 60;                  // 60s：请求/解码失败，等上游恢复
 
 /**
  * 判断链接是否含 IP 绑定（服务器出口 IP 硬编码，客户端无法播放）
@@ -56,6 +70,36 @@ function buildNegKey(kind, tmdbId, season, episode, config) {
   return `stream:neg:movie:${tmdbId}:${flag}`;
 }
 
+/**
+ * pending key：去掉 stream: 冗余前缀
+ *   stream:movie:13:1 → pending:movie:13:1
+ */
+function buildPendingKey(cacheKey) {
+  return `pending:${cacheKey.replace(/^stream:/, '')}`;
+}
+
+/**
+ * 失败统一处理
+ *
+ * - pending 未命中：写 pending 120s，返回诊断（不锁死）
+ * - pending 命中：写负缓存 negTtl 秒 + 清 pending，返回诊断
+ */
+async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl) {
+  const pendingKey = buildPendingKey(cacheKey);
+  const pending = await getCache(env, pendingKey);
+
+  if (pending) {
+    await setCache(env, negKey, { detail, reason }, { redisTtl: negTtl });
+    await delCache(env, pendingKey);
+    log.info(`二次确认失败(${reason})，写入负缓存: ${negKey} ttl=${negTtl}s`);
+  } else {
+    await setCache(env, pendingKey, { ts: Date.now(), reason }, { redisTtl: 120 });
+    log.info(`首次失败(${reason})，写入 pending: ${pendingKey}`);
+  }
+
+  return { streams: [buildDiagnostic(reason, detail)] };
+}
+
 export async function streamHandler({ type, id, config, env }) {
   const parsed = await parseAnyId(env, id, type, config.tmdbKey);
   if (!parsed) {
@@ -69,21 +113,25 @@ export async function streamHandler({ type, id, config, env }) {
   const cacheKey = buildCacheKey(kind, tmdbId, season, episode, config);
   const negKey = buildNegKey(kind, tmdbId, season, episode, config);
 
-  // 1. 命中 positive cache
+  // ─── 1. 正缓存 ───
   const cached = await getCache(env, cacheKey, { l1Ttl: TTL.STREAM_L1 });
   if (cached) {
     log.info(`Stream 命中缓存: ${cacheKey}`);
     return { streams: cached };
   }
 
-  // 2. 命中 negative cache
+  // ─── 2. 负缓存 ───
   const neg = await getCache(env, negKey);
   if (neg) {
-    log.info(`Stream 命中负面缓存: ${negKey}`);
-    return { streams: [buildDiagnostic('cached_no_url', neg.detail || '近期无可用链接')] };
+    const reason = neg.reason || 'cached_no_url';
+    log.info(`Stream 命中负面缓存: ${negKey} (${reason})`);
+    return {
+      streams: [buildDiagnostic(`cached:${reason}`, neg.detail || '近期无可用链接')],
+    };
   }
-
-  // 3. 回源
+  
+  // ─── 3. 获取 access_token ───
+  // 注意：token 失败是全局问题，不写 pending / 负缓存
   let accessToken;
   try {
     accessToken = await getAccessToken(
@@ -101,42 +149,39 @@ export async function streamHandler({ type, id, config, env }) {
   }
 
   const headers = buildStreamHeaders(accessToken, lang);
-  const target = {
-    tmdbId: Number(tmdbId),
-    kind,
-    season,
-    episode,
-  };
+  const target = { tmdbId: Number(tmdbId), kind, season, episode };
 
   log.info(`请求 stream: ${kind} tmdb=${tmdbId}${season ? ` S${season}E${episode}` : ''}`);
 
   const payload = buildStreamPayload(target);
   const url = `${TRYBOX_URLS.stream}?payload=${encodeURIComponent(JSON.stringify(payload))}`;
 
+  // ─── 4. 请求上游（retryCount=0，失败交给 pending / 负缓存兜底）───
   let raw;
   try {
-    raw = await postText(url, payload, headers);
+    raw = await postText(url, payload, headers, { retryCount: 0 });
   } catch (e) {
     log.error('stream 请求失败:', e.message);
-    return { streams: [buildDiagnostic('http_failed', e.message)] };
+    return failWithPending(env, cacheKey, negKey, 'http_failed', e.message, NEG_TTL_FAILED);
   }
 
+  // ─── 5. 解码 ───
   let decoded;
   try {
     decoded = decodeNode(JSON.parse(raw));
   } catch (e) {
     log.error('stream 解码失败:', e.message);
-    return { streams: [buildDiagnostic('decode_failed', e.message)] };
+    return failWithPending(env, cacheKey, negKey, 'decode_failed', e.message, NEG_TTL_FAILED);
   }
 
-  const result = decoded.result || {};
+  const result = (decoded && decoded.result) || {};
   const allLinks = [
     ...(result.mbp_links || []),
     ...(result.links || []),
     ...(result.beta_links || []),
   ];
 
-  // 4. 过滤：按配置剔除 IP 绑定 URL
+  // ─── 6. 过滤 IP 绑定 ───
   const removeIdValidation = config.removeIdValidation !== false;
   const validLinks = allLinks.filter((l) => {
     if (!l.url) return false;
@@ -145,19 +190,22 @@ export async function streamHandler({ type, id, config, env }) {
   });
 
   log.info(
-    `原始 ${allLinks.length} 条，剔除 IP 校验后 ${validLinks.length} 条` +
-    `（removeIdValidation=${removeIdValidation}）`
+    removeIdValidation
+      ? `原始 ${allLinks.length} 条，剔除 IP 校验后 ${validLinks.length} 条（removeIdValidation=true）`
+      : `原始 ${allLinks.length} 条，未做 IP 剔除（removeIdValidation=false）`
   );
 
-  // 5. 空结果 → negative cache
+  // ─── 7. 空结果（上游 200 但 0 条）───
   if (!validLinks.length) {
-    const detail = `原始 ${allLinks.length} 条，剔除 IP 校验后无可用链接`;
-    await setCache(env, negKey, { detail }, { redisTtl: TTL.STREAM_NEG_REDIS });
-    log.info(`写入负面缓存: ${negKey}`);
-    return { streams: [buildDiagnostic('no_valid_url', detail)] };
+    const detail = removeIdValidation
+      ? `原始 ${allLinks.length} 条，剔除 IP 校验后无可用链接`
+      : `原始 ${allLinks.length} 条，无可用链接（未做 IP 剔除）`;
+    return failWithPending(env, cacheKey, negKey, 'no_valid_url', detail, NEG_TTL_EMPTY);
   }
 
-  // 6. 成功 → positive cache
+  // ─── 8. 成功 → 正缓存 + 清 pending ───
+  await delCache(env, buildPendingKey(cacheKey));
+
   const streams = validLinks
     .map((l) => ({
       name: `TryBox · ${l.group || 'Unknown'}`,
