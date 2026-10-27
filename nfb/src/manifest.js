@@ -41,11 +41,11 @@ export function getManifest() {
   });
 
   return {
-    id: 'com.nfb.addon',
+    id: 'wangqifei.eu.org.nfb',
     version: '2.1.0',
     name: 'NFB Films',
-    description: 'National Film Board of Canada',
-    logo: 'https://www.nfb.ca/static/img/apple-touch-icon.png',
+    description: '加拿大国家电影局 National Film Board of Canada 。 配置页可自定义channel',
+    logo: 'https://assets.nfbcdn.ca/static/norman/assets/img/layout/icon/ONF_Logo_hor_blanc_sm-b.4fdf03646fd1.svg',
     resources: ['catalog', 'meta', 'stream', 'subtitles'],
     types: ['movie', 'series'],
     catalogs: catalogs,
