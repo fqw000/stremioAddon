@@ -45,7 +45,7 @@ export async function handleRequest(request, env, ctx) {
     log.info(`${request.method} ${pathname}${url.search ? ' ' + url.search.slice(0, 120) : ''}`);
 
     // ===== 路由 =====
-    if (pathname === '/manifest.json') return handleManifest();
+    if (pathname=== '/' | pathname === '/manifest.json') return handleManifest();
 
     const catalogMatch = pathname.match(/^\/catalog\/(movie|series)\/([^/]+?)(?:\/([^/]+))?\.json$/);
     if (catalogMatch) return await handleCatalog(catalogMatch[1], catalogMatch[2], catalogMatch[3], url);
