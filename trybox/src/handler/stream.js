@@ -84,7 +84,7 @@ function buildPendingKey(cacheKey) {
  * - pending 未命中：写 pending 120s，返回诊断（不锁死）
  * - pending 命中：写负缓存 negTtl 秒 + 清 pending，返回诊断
  */
-async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl) {
+async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl, rawId) {
   const pendingKey = buildPendingKey(cacheKey);
   const pending = await getCache(env, pendingKey);
 
@@ -97,18 +97,25 @@ async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl) {
     log.info(`首次失败(${reason})，写入 pending: ${pendingKey}`);
   }
 
-  return { streams: [buildDiagnostic(reason, detail)] };
+  return { streams: [buildDiagnostic(reason, detail, rawId)] };
 }
 
 export async function streamHandler({ type, id, config, env }) {
   const parsed = await parseAnyId(env, id, type, config.tmdbKey);
   if (!parsed) {
     log.warn(`无法解析 id: ${id}`);
-    return { streams: [buildDiagnostic('invalid_id', `无法解析 id: ${id}`)] };
+    return { streams: [buildDiagnostic('invalid_id', `无法解析 id: ${id}`, id)] };
   }
 
   const { tmdbId, kind, season, episode } = parsed;
   const lang = config.lang || 'zh-CN';
+
+  const baseId = id.split(':')[0];
+  let epInfo = '';
+  if (kind === 'tv' && season && episode) {
+    epInfo = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')} · `;
+  }
+  const displayName = `${epInfo}${baseId}`;
 
   const cacheKey = buildCacheKey(kind, tmdbId, season, episode, config);
   const negKey = buildNegKey(kind, tmdbId, season, episode, config);
@@ -126,7 +133,7 @@ export async function streamHandler({ type, id, config, env }) {
     const reason = neg.reason || 'cached_no_url';
     log.info(`Stream 命中负面缓存: ${negKey} (${reason})`);
     return {
-      streams: [buildDiagnostic(`cached:${reason}`, neg.detail || '近期无可用链接')],
+      streams: [buildDiagnostic(`cached:${reason}`, neg.detail || '近期无可用链接', baseId)],
     };
   }
   
@@ -141,11 +148,11 @@ export async function streamHandler({ type, id, config, env }) {
     );
   } catch (e) {
     log.error('获取 access_token 失败:', e.message);
-    return { streams: [buildDiagnostic('token_failed', e.message)] };
+    return { streams: [buildDiagnostic('token_failed', e.message, baseId)] };
   }
 
   if (!accessToken) {
-    return { streams: [buildDiagnostic('no_token', 'access_token 为空')] };
+    return { streams: [buildDiagnostic('no_token', 'access_token 为空', baseId)] };
   }
 
   const headers = buildStreamHeaders(accessToken, lang);
@@ -162,7 +169,7 @@ export async function streamHandler({ type, id, config, env }) {
     raw = await postText(url, payload, headers, { retryCount: 0 });
   } catch (e) {
     log.error('stream 请求失败:', e.message);
-    return failWithPending(env, cacheKey, negKey, 'http_failed', e.message, NEG_TTL_FAILED);
+    return failWithPending(env, cacheKey, negKey, 'http_failed', e.message, NEG_TTL_FAILED, baseId);
   }
 
   // ─── 5. 解码 ───
@@ -171,7 +178,7 @@ export async function streamHandler({ type, id, config, env }) {
     decoded = decodeNode(JSON.parse(raw));
   } catch (e) {
     log.error('stream 解码失败:', e.message);
-    return failWithPending(env, cacheKey, negKey, 'decode_failed', e.message, NEG_TTL_FAILED);
+    return failWithPending(env, cacheKey, negKey, 'decode_failed', e.message, NEG_TTL_FAILED, baseId);
   }
 
   const result = (decoded && decoded.result) || {};
@@ -200,7 +207,7 @@ export async function streamHandler({ type, id, config, env }) {
     const detail = removeIdValidation
       ? `原始 ${allLinks.length} 条，剔除 IP 校验后无可用链接`
       : `原始 ${allLinks.length} 条，无可用链接（未做 IP 剔除）`;
-    return failWithPending(env, cacheKey, negKey, 'no_valid_url', detail, NEG_TTL_EMPTY);
+    return failWithPending(env, cacheKey, negKey, 'no_valid_url', detail, NEG_TTL_EMPTY, baseId);
   }
 
   // ─── 8. 成功 → 正缓存 + 清 pending ───
@@ -208,8 +215,8 @@ export async function streamHandler({ type, id, config, env }) {
 
   const streams = validLinks
     .map((l) => ({
-      name: `TryBox · ${l.group || 'Unknown'}`,
-      title: `${l.quality || 'Unknown'} · ${l.file_name || ''}`.trim(),
+      name: displayName, // ✨ 大字：S01E01 · tt1234567
+      title: `[${l.quality || '?'}] ${l.group || 'TryBox'} · ${l.file_name || ''}`.trim(), 
       url: l.url,
       quality: l.quality,
       size: typeof l.size === 'number' ? `${(l.size / 1024 / 1024).toFixed(0)} MB` : l.size,
@@ -227,9 +234,9 @@ export async function streamHandler({ type, id, config, env }) {
   return { streams };
 }
 
-function buildDiagnostic(reason, detail) {
+function buildDiagnostic(reason, detail, rawId) {
   return {
-    name: 'TryBox · 诊断',
+    name: '诊断 · ' + (rawId || '未知'),
     url: `trybox|${reason}|${detail}`,
   };
 }
