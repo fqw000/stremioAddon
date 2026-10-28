@@ -1,9 +1,5 @@
 /**
  * Stream 播放处理器
- * 
- * 支持两种 ID 格式：
- *   - mtyy_{vid}:{sid}:{nid} → 直接查
- *   - tt{imdbId}[:s:e] → 通过 resolver 转换为 vid
  */
 
 import { getActiveHost, fetchHtml, isCdnReachable, USER_AGENT } from '../fetch.js';
@@ -14,10 +10,18 @@ import { resolveImdbToMtyy } from '../resolver.js';
 // ============================================================
 // 流构造工具
 // ============================================================
-function makePlayableStream({ url, host, label, sid }) {
+function makePlayableStream({ url, host, label, sid, displayName, quality, epTitle }) {
+    // 小字：比如 "主线路 · 02 · 1080P"
+    const titleParts = [];
+    if (label) titleParts.push(label);
+    if (epTitle) titleParts.push(epTitle);
+    if (quality) titleParts.push(quality);
+    
+    const title = titleParts.join(' · ') || '播放';
+
     return {
-        name: `麦田影院 · ${label}`,
-        title: label,
+        name: displayName,              // 大字：流人 | S01E02
+        title: title,                   // 小字：主线路 · 02 · 1080P
         url,
         behaviorHints: {
             notWebReady: true,
@@ -41,7 +45,7 @@ function makeDiagnostic({ title, playPageUrl, directUrl, extra }) {
     return {
         name: '麦田影院 · 诊断',
         title: lines.join('\n'),
-        externalUrl: playPageUrl || 'https://mtyy5.com/',
+        externalUrl: directUrl || playPageUrl || 'https://mtyy5.com/',
     };
 }
 
@@ -49,11 +53,9 @@ function makeDiagnostic({ title, playPageUrl, directUrl, extra }) {
 // 主入口
 // ============================================================
 export async function streamHandler({ id, type, config = {} }) {
-    // ─── 1. 统一 ID 解析 ───
     let vid, sid, nid;
     
     if (id.startsWith('tt')) {
-        // tt 格式：tt0109830 或 tt0944947:1:1
         const parts = id.split(':');
         const ttId = parts[0];
         const season = parts[1] ? parseInt(parts[1], 10) : undefined;
@@ -74,27 +76,22 @@ export async function streamHandler({ id, type, config = {} }) {
         sid = resolved.sid;
         nid = resolved.nid;
     } else {
-        const m = id.match(/^mtyy_(\d+):(\d+):(\d+)$/);
+        const m = id.match(/^mtyy_(\d+)(?::(\d+):(\d+))?$/);
         if (!m) {
             return {
                 streams: [makeDiagnostic({
                     title: 'ID 格式错误',
-                    extra: `期望: mtyy_{vid}:{sid}:{nid} 或 tt{imdbId}[:s:e]\n实际: ${id}`,
+                    extra: `期望: mtyy_{vid} 或 mtyy_{vid}:{sid}:{nid} 或 tt{imdbId}\n实际: ${id}`,
                 })],
                 cacheMaxAge: 60,
                 _fromCache: false,
             };
         }
         vid = m[1];
-        sid = m[2];
-        nid = m[3];
+        sid = m[2] || '1';
+        nid = m[3] || '1';
     }
 
-    // ─── 配置解析 ───
-    const lineBlacklist = (config.lineBlacklist || []).map(String);
-    const hideEncrypted = config.hideEncrypted !== false;
-
-    // ─── 2. 获取主域名 ───
     let host;
     try {
         host = await getActiveHost();
@@ -109,95 +106,154 @@ export async function streamHandler({ id, type, config = {} }) {
         };
     }
 
-    // ─── 3. 尝试主线路 ───
-    const playPageUrl = `${host}/vodplay/${vid}-${sid}-${nid}.html`;
-    let primary = { ok: false, reason: 'blacklisted' };
+    const lineBlacklist = (config.lineBlacklist || []).map(String);
+    const hideEncrypted = config.hideEncrypted !== false;
 
-    // 主线路不在黑名单才尝试
-    if (!lineBlacklist.includes(sid)) {
-        primary = await fetchStreamForEpisode(host, vid, sid, nid);
+    // 获取完整详情
+    const detail = await getFullDetail(host, vid);
+    
+    // 默认值
+    let movieName = detail?.name || '麦田影院';
+    let episodeNum = 1;
+    let seasonNum = 1;
+    let mainEpTitle = '正片';
 
-        if (primary.ok) {
-            const cdnOk = await isCdnReachable(primary.url);
-            if (cdnOk) {
-                return {
-                    streams: [makePlayableStream({
-                        url: primary.url,
-                        host,
-                        label: `线路 ${sid} · 第 ${nid} 集`,
-                        sid,
-                    })],
-                    cacheMaxAge: TTL.STREAM,
-                    _fromCache: primary.fromCache || false,
-                };
+    // 计算正确的季集标识和当前集标题
+    if (detail) {
+        if (type === 'series') {
+            // 寻找主线路里当前 nid 在数组中的位置，作为集数
+            const mainLine = detail.lines.find(l => l.sid === sid);
+            if (mainLine) {
+                const idx = mainLine.episodes.findIndex(e => e.nid === nid);
+                if (idx !== -1) {
+                    episodeNum = idx + 1;
+                    mainEpTitle = mainLine.episodes[idx].title;
+                }
+            }
+        } else {
+            // 电影没有集数
+            mainEpTitle = '正片';
+        }
+    }
+
+    // 格式化集数 S01E02
+    const epStr = String(episodeNum).padStart(2, '0');
+    const seriesTag = type === 'series' ? ` | S${String(seasonNum).padStart(2, '0')}E${epStr}` : '';
+    const displayName = `${movieName}${seriesTag}`;
+
+    const targetLines = [];
+    // 主线路
+    targetLines.push({ name: '主线路', sid, nid, encrypted: false, epTitle: mainEpTitle });
+
+    // 其他备用线路
+    if (detail) {
+        for (const line of detail.lines) {
+            if (line.sid === sid) continue;
+            if (hideEncrypted && line.encrypted) continue;
+            if (lineBlacklist.includes(line.sid)) continue;
+            
+            const ep = line.episodes.find(e => e.nid === nid);
+            if (ep) {
+                targetLines.push({ name: line.name, sid: line.sid, nid: ep.nid, encrypted: line.encrypted, epTitle: ep.title });
             }
         }
+    }
 
-        // 用户未隐藏加密线路，且主线路正是 NBY → 直接返回诊断，不降级
-        if (primary.reason === 'nby' && !hideEncrypted) {
-            return {
-                streams: [makeDiagnostic({
-                    title: 'NB源加密线路，暂不支持',
-                    playPageUrl,
-                    extra: '这是加密线路，需要专用播放器解密\n可在配置页关闭「隐藏加密线路」来看到此提示',
-                })],
-                cacheMaxAge: TTL.NEG_CDN,
-                _fromCache: false,
-            };
+    // 并发获取直链
+    const fetchPromises = targetLines.map(async (line) => {
+        if (line.encrypted && !hideEncrypted) {
+            return { status: 'encrypted', line };
+        }
+        
+        const res = await fetchStreamForEpisode(host, vid, line.sid, line.nid);
+        if (!res.ok) return { status: 'failed', line, reason: res.reason };
+        
+        const cdnOk = await isCdnReachable(res.url);
+        
+        return { status: 'ok', line, url: res.url, quality: res.quality, cdnOk };
+    });
+
+    const results = await Promise.allSettled(fetchPromises);
+    const validStreams = [];
+    let firstDirectUrl = null;
+    let firstPlayPageUrl = `${host}/vodplay/${vid}-${sid}-${nid}.html`;
+
+    for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const data = r.value;
+
+        if (data.status === 'ok') {
+            if (!firstDirectUrl) firstDirectUrl = data.url;
+            
+            validStreams.push(makePlayableStream({
+                url: data.url,
+                host,
+                label: data.line.name,
+                sid: data.line.sid,
+                displayName: displayName,
+                quality: data.quality,
+                epTitle: data.line.epTitle
+            }));
+        } else if (data.status === 'encrypted') {
+            if (!hideEncrypted) {
+                validStreams.push(makeDiagnostic({
+                    title: `${data.line.name} 加密线路`,
+                    playPageUrl: `${host}/vodplay/${vid}-${data.line.sid}-${data.line.nid}.html`,
+                    extra: '该线路需要专用播放器解密，无法直接播放'
+                }));
+            }
         }
     }
 
-    // ─── 4. 降级：尝试其他非加密线路 ───
-    const alternatives = await getAlternatives(host, vid, sid);
-    let matchedCount = 0;
-    for (const line of alternatives) {
-        if (line.encrypted) continue;                          // 降级永远跳过加密线路
-        if (lineBlacklist.includes(line.sid)) continue;        // 用户禁用的线路跳过
+    // 去重
+    const uniqueStreams = Array.from(
+        new Map(validStreams.map(s => [s.url || s.externalUrl, s])).values()
+    );
 
-        const ep = line.episodes.find(e => e.nid === nid);
-        if (!ep) continue;
-        matchedCount++;
+    if (uniqueStreams.length > 0) {
+        uniqueStreams.sort((a, b) => {
+            const aIsDiag = a.externalUrl ? 1 : 0;
+            const bIsDiag = b.externalUrl ? 1 : 0;
+            return aIsDiag - bIsDiag;
+        });
 
-        const alt = await fetchStreamForEpisode(host, vid, ep.sid, ep.nid);
-        if (!alt.ok) continue;
-
-        const altCdnOk = await isCdnReachable(alt.url);
-        if (altCdnOk) {
-            return {
-                streams: [makePlayableStream({
-                    url: alt.url,
-                    host,
-                    label: `${line.name}（备用）· ${ep.title}`,
-                    sid: ep.sid,
-                })],
-                cacheMaxAge: TTL.STREAM,
-                _fromCache: alt.fromCache || false,
-            };
-        }
+        return {
+            streams: uniqueStreams,
+            cacheMaxAge: TTL.STREAM,
+            _fromCache: false, 
+        };
     }
 
-    // ─── 5. 全部失败 → 诊断 ───
-    let reasonText = '无法提取播放链接';
-    if (primary.reason === 'blacklisted') reasonText = '该线路已被禁用（配置页）';
-    else if (primary.reason === 'nby') reasonText = 'NB源加密线路，暂不支持';
-    else if (primary.reason === 'parse_failed') reasonText = '播放页解析失败';
-    else if (primary.reason === 'fetch_failed') reasonText = '播放页请求失败';
-    else if (primary.ok) reasonText = 'CDN 不可达（可能是网络封锁）';
+    // 全部失败 -> 诊断
+    const finalStreams = [];
+    if (firstDirectUrl) {
+        finalStreams.push(makePlayableStream({
+            url: firstDirectUrl,
+            host,
+            label: '强制尝试',
+            sid: sid,
+            displayName: displayName,
+            quality: '',
+            epTitle: mainEpTitle
+        }));
+    }
+
+    finalStreams.push(makeDiagnostic({
+        title: '所有线路均不可达或解析失败',
+        playPageUrl: firstPlayPageUrl,
+        directUrl: firstDirectUrl,
+        extra: `已尝试 ${targetLines.length} 条线路\n💡 点击此卡片会唤起浏览器，可在地址栏复制直链`,
+    }));
 
     return {
-        streams: [makeDiagnostic({
-            title: reasonText,
-            playPageUrl,
-            directUrl: primary.url,
-            extra: `已尝试 ${matchedCount} 条匹配线路，均失败\n可长按复制直链测试`,
-        })],
+        streams: finalStreams,
         cacheMaxAge: TTL.NEG_CDN,
         _fromCache: false,
     };
 }
 
 // ============================================================
-// 辅助：获取某集直链（带缓存 + 负缓存）
+// 辅助：获取某集直链
 // ============================================================
 async function fetchStreamForEpisode(host, vid, sid, nid) {
     const nbyKey = `stream:nby:${vid}:${sid}:${nid}`;
@@ -207,7 +263,7 @@ async function fetchStreamForEpisode(host, vid, sid, nid) {
     if (await negGet(failKey)) return { ok: false, reason: 'parse_failed' };
 
     const cacheKey = `stream:${vid}:${sid}:${nid}`;
-    const { value: cached, fromCache } = await withCache(cacheKey, TTL.STREAM, async () => {
+    const { value: cached } = await withCache(cacheKey, TTL.STREAM, async () => {
         const playUrl = `${host}/vodplay/${vid}-${sid}-${nid}.html`;
         const html = await fetchHtml(playUrl);
         if (!html) {
@@ -217,37 +273,34 @@ async function fetchStreamForEpisode(host, vid, sid, nid) {
 
         const result = parsePlayerUrl(html);
 
-        if (result && typeof result === 'object' && result.type === 'nby') {
+        if (result && result.type === 'nby') {
             await negSet(nbyKey, TTL.NEG_PARSE);
             return null;
         }
 
-        if (!result || typeof result !== 'string') {
+        if (!result || !result.url) {
             await negSet(failKey, TTL.NEG_PARSE);
             return null;
         }
 
-        return result;
+        return result; // { url, quality }
     });
 
     if (!cached) {
-        // 回源失败，判断具体原因（负缓存已写入）
         if (await negGet(nbyKey)) return { ok: false, reason: 'nby' };
         return { ok: false, reason: 'parse_failed' };
     }
-    return { ok: true, url: cached, fromCache };
+    return { ok: true, url: cached.url, quality: cached.quality };
 }
 
 // ============================================================
-// 辅助：获取备用线路（复用 meta 缓存）
+// 辅助：获取完整详情
 // ============================================================
-async function getAlternatives(host, vid, currentSid) {
+async function getFullDetail(host, vid) {
     const { value: detail } = await withCache(`meta:${vid}`, TTL.META, async () => {
         const html = await fetchHtml(`${host}/voddetail/${vid}.html`);
         if (!html) return null;
         return parseDetail(html, vid);
     });
-
-    if (!detail) return [];
-    return detail.lines.filter(l => !l.encrypted && l.sid !== currentSid);
+    return detail;
 }

@@ -193,13 +193,22 @@ export function parsePlayerUrl(html) {
     // 1. m3u8 直链（url 或 url_next 两个字段都试）
     const m3u8Match = html.match(/"url(_next)?"\s*:\s*"([^"]+\.m3u8[^"]*)"/i);
     if (m3u8Match) {
-        return m3u8Match[2].replace(/\\\//g, '/');
+        const url = m3u8Match[2].replace(/\\\//g, '/');
+        let quality = '';
+        // 尝试提取 quality 或 resolution
+        const qMatch = html.match(/"quality"\s*:\s*"([^"]+)"/i) 
+                    || html.match(/"resolution"\s*:\s*"([^"]+)"/i)
+                    || html.match(/"level"\s*:\s*"([^"]+)"/i);
+        if (qMatch) {
+            quality = qMatch[1].toUpperCase(); // 统一转大写，如 1080P
+        }
+        return { url, quality };
     }
 
-    // 2. NBY 加密（url 或 url_next 两个字段都试）
-    const nbyMatch = html.match(/"url(_next)?"\s*:\s*"(NBY-[^"]+)"/i);
+    // 2. 检测 NBY 加密
+    const nbyMatch = html.match(/"url"\s*:\s*"(NBY-[^"]+)"/i);
     if (nbyMatch) {
-        return { type: 'nby', raw: nbyMatch[2] };
+        return { type: 'nby', raw: nbyMatch[1] };
     }
 
     return null;
