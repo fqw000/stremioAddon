@@ -48,7 +48,7 @@ function makeDiagnostic({ title, playPageUrl, directUrl, extra }) {
 // ============================================================
 // 主入口
 // ============================================================
-export async function streamHandler({ id, type }) {
+export async function streamHandler({ id, type, config = {} }) {
     // ─── 1. 统一 ID 解析 ───
     let vid, sid, nid;
     
@@ -90,6 +90,10 @@ export async function streamHandler({ id, type }) {
         nid = m[3];
     }
 
+    // ─── 配置解析 ───
+    const lineBlacklist = (config.lineBlacklist || []).map(String);
+    const hideEncrypted = config.hideEncrypted !== false;
+
     // ─── 2. 获取主域名 ───
     let host;
     try {
@@ -107,20 +111,38 @@ export async function streamHandler({ id, type }) {
 
     // ─── 3. 尝试主线路 ───
     const playPageUrl = `${host}/vodplay/${vid}-${sid}-${nid}.html`;
-    const primary = await fetchStreamForEpisode(host, vid, sid, nid);
+    let primary = { ok: false, reason: 'blacklisted' };
 
-    if (primary.ok) {
-        const cdnOk = await isCdnReachable(primary.url);
-        if (cdnOk) {
+    // 主线路不在黑名单才尝试
+    if (!lineBlacklist.includes(sid)) {
+        primary = await fetchStreamForEpisode(host, vid, sid, nid);
+
+        if (primary.ok) {
+            const cdnOk = await isCdnReachable(primary.url);
+            if (cdnOk) {
+                return {
+                    streams: [makePlayableStream({
+                        url: primary.url,
+                        host,
+                        label: `线路 ${sid} · 第 ${nid} 集`,
+                        sid,
+                    })],
+                    cacheMaxAge: TTL.STREAM,
+                    _fromCache: primary.fromCache || false,
+                };
+            }
+        }
+
+        // 用户未隐藏加密线路，且主线路正是 NBY → 直接返回诊断，不降级
+        if (primary.reason === 'nby' && !hideEncrypted) {
             return {
-                streams: [makePlayableStream({
-                    url: primary.url,
-                    host,
-                    label: `线路 ${sid} · 第 ${nid} 集`,
-                    sid,
+                streams: [makeDiagnostic({
+                    title: 'NB源加密线路，暂不支持',
+                    playPageUrl,
+                    extra: '这是加密线路，需要专用播放器解密\n可在配置页关闭「隐藏加密线路」来看到此提示',
                 })],
-                cacheMaxAge: TTL.STREAM,
-                _fromCache: primary.fromCache || false,
+                cacheMaxAge: TTL.NEG_CDN,
+                _fromCache: false,
             };
         }
     }
@@ -129,6 +151,9 @@ export async function streamHandler({ id, type }) {
     const alternatives = await getAlternatives(host, vid, sid);
     let matchedCount = 0;
     for (const line of alternatives) {
+        if (line.encrypted) continue;                          // 降级永远跳过加密线路
+        if (lineBlacklist.includes(line.sid)) continue;        // 用户禁用的线路跳过
+
         const ep = line.episodes.find(e => e.nid === nid);
         if (!ep) continue;
         matchedCount++;
@@ -153,7 +178,8 @@ export async function streamHandler({ id, type }) {
 
     // ─── 5. 全部失败 → 诊断 ───
     let reasonText = '无法提取播放链接';
-    if (primary.reason === 'nby') reasonText = 'NB源加密线路，暂不支持';
+    if (primary.reason === 'blacklisted') reasonText = '该线路已被禁用（配置页）';
+    else if (primary.reason === 'nby') reasonText = 'NB源加密线路，暂不支持';
     else if (primary.reason === 'parse_failed') reasonText = '播放页解析失败';
     else if (primary.reason === 'fetch_failed') reasonText = '播放页请求失败';
     else if (primary.ok) reasonText = 'CDN 不可达（可能是网络封锁）';
@@ -204,7 +230,11 @@ async function fetchStreamForEpisode(host, vid, sid, nid) {
         return result;
     });
 
-    if (!cached) return { ok: false, reason: 'parse_failed' };
+    if (!cached) {
+        // 回源失败，判断具体原因（负缓存已写入）
+        if (await negGet(nbyKey)) return { ok: false, reason: 'nby' };
+        return { ok: false, reason: 'parse_failed' };
+    }
     return { ok: true, url: cached, fromCache };
 }
 

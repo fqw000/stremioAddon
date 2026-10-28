@@ -6,7 +6,7 @@ import { getActiveHost, fetchHtml } from '../fetch.js';
 import { parseDetail } from '../parser.js';
 import { withCache, negSet, TTL } from '../cache.js';
 
-export async function metaHandler({ id, type }) {
+export async function metaHandler({ id, type, config = {} }) {
     const m = id.match(/^mtyy_(\d+)$/);
     if (!m) return { meta: null, cacheMaxAge: 60 };
 
@@ -45,12 +45,13 @@ export async function metaHandler({ id, type }) {
         }
 
         // ============================================================
-        // 3. 组装 videos（过滤 NBY 加密线路）
+        // 3. 组装 videos（根据用户配置决定是否输出 NBY）
         // ============================================================
+        const hideEncrypted = config.hideEncrypted !== false;
         const videos = detail.isMovie
             ? undefined
             : detail.lines
-                .filter(line => !line.encrypted) // 红线：NBY 不输出
+                .filter(line => !(line.encrypted && hideEncrypted))
                 .flatMap(line =>
                     line.episodes.map((ep, idx) => ({
                         id: `mtyy_${ep.vid}:${ep.sid}:${ep.nid}`,

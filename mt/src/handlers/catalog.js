@@ -7,16 +7,24 @@ import { parseVideoList, parseRss } from '../parser.js';
 import { withCache, negSet, TTL } from '../cache.js';
 
 const CATEGORY_MAP = {
-    'mtyy_movie':   { tid: '1',  type: 'movie'  },
-    'mtyy_series':  { tid: '2',  type: 'series' },
-    'mtyy_anime':   { tid: '3',  type: 'series' },
-    'mtyy_variety': { tid: '4',  type: 'series' },
-    'mtyy_short':   { tid: '26', type: 'series' },
+    'mtyy_movie':   { key: 'movie',   tid: '1',  type: 'movie'  },
+    'mtyy_series':  { key: 'series',  tid: '2',  type: 'series' },
+    'mtyy_anime':   { key: 'anime',   tid: '3',  type: 'series' },
+    'mtyy_variety': { key: 'variety', tid: '4',  type: 'series' },
+    'mtyy_short':   { key: 'short',   tid: '26', type: 'series' },
 };
 
-export async function catalogHandler({ id, type, extra = {} }) {
+const ALL_CATS = ['movie', 'series', 'anime', 'variety', 'short'];
+
+export async function catalogHandler({ id, type, extra = {}, config = {} }) {
     const cat = CATEGORY_MAP[id];
     if (!cat) return { metas: [], cacheMaxAge: 60 };
+
+    // 用户禁用了这个分类 → 快速返回空
+    const enabledCats = config.cats || ALL_CATS;
+    if (!enabledCats.includes(cat.key)) {
+        return { metas: [], cacheMaxAge: 60 };
+    }
 
     const host = await getActiveHost();
 
