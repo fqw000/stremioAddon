@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麦田影院 · 配置</title>
+    <link rel="icon" href="https://mtyy5.com/static/ds6/img/favicon.ico">
+    <link rel="stylesheet" href="/configure.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <img src="https://mtyy5.com/static/ds6/img/desklogo.png" alt="麦田影院" class="logo-img" onerror="this.style.display='none'">
+            <h1>麦田影院</h1>
+            <p class="subtitle">影视聚合 Addon · 配置你的专属体验</p>
+        </header>
+
+        <main class="content">
+            <!-- Catalog 选择 -->
+            <section class="group">
+                <h2 class="group-title">内容目录</h2>
+                <p class="group-desc">勾选你想在 Stremio 首页看到的内容分类</p>
+                <div class="card">
+                    <div class="checkbox-group" id="cats">
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="movie" checked>
+                            <span>🎬 电影</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="series" checked>
+                            <span>📺 电视剧</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="anime" checked>
+                            <span>🎌 动漫</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="variety" checked>
+                            <span>🎤 综艺</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="short" checked>
+                            <span>🎞️ 短剧</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 播放设置 -->
+            <section class="group">
+                <h2 class="group-title">播放设置</h2>
+                <div class="card">
+                    <div class="setting">
+                        <div class="setting-info">
+                            <span class="setting-label">隐藏加密线路</span>
+                            <span class="setting-desc">不显示 NB 源等加密线路（推荐开启）</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="hl" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <span class="setting-label">线路黑名单</span>
+                            <span class="setting-desc">禁用的 sid 列表（逗号分隔，如 4）</span>
+                        </div>
+                        <input type="text" id="lines" class="input" placeholder="如: 4,5">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 高级选项 -->
+            <section class="group">
+                <h2 class="group-title">高级选项</h2>
+                <p class="group-desc">可选，用于 tt（IMDb）ID 匹配到麦田站</p>
+                <div class="card">
+                    <div class="setting">
+                        <div class="setting-info">
+                            <span class="setting-label">TMDB API Key</span>
+                            <span class="setting-desc">留空则使用服务器默认 Key</span>
+                        </div>
+                        <input type="text" id="tk" class="input" placeholder="留空使用默认">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 配置摘要 -->
+            <section class="group">
+                <h2 class="group-title">安装地址</h2>
+                <div class="card">
+                    <div class="summary">
+                        <span class="summary-val" id="installUrl">生成中…</span>
+                    </div>
+                    <div class="summary-actions">
+                        <button class="btn-copy" id="copyBtn">复制链接</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <button id="installBtn" class="btn-install">安装到 Stremio</button>
+                  <p class="footer-hint">Made with ❤️ for Stremio Community</p>
+      <p class="footer-hint">  wangqifei.eu.org </p>
+      <p class="footer-hint"><img src="https://visitor-badge.laobi.icu/badge?page_id=mtStremioAddon;left_text=Visitors" alt="Visitors"></p>
+        </footer>
+    </div>
+
+    <script src="/configure.js"></script>
+</body>
+</html>

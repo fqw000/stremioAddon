@@ -3,6 +3,7 @@
  */
 
 import { getManifest } from '../src/manifest.js';
+import { getConfigFromRequest } from '../src/config.js';
 import { catalogHandler } from '../src/handlers/catalog.js';
 import { metaHandler } from '../src/handlers/meta.js';
 import { streamHandler } from '../src/handlers/stream.js';
@@ -20,10 +21,15 @@ export default async function (req) {
 
     try {
         // ============================================================
+        // 全局解析配置（只解析一次，透传给各 handler）
+        // ============================================================
+        const appConfig = getConfigFromRequest(req, process.env);
+
+        // ============================================================
         // Manifest
         // ============================================================
         if (path === '/manifest.json' || path === '/') {
-            return json(getManifest(), 200, 'public, max-age=300');
+            return json(getManifest(appConfig), 200, 'public, max-age=300');
         }
 
         // ============================================================
@@ -38,8 +44,9 @@ export default async function (req) {
                 id: decodeURIComponent(id),
                 type,
                 extra,
+                config: appConfig,
             });
-            return json(result, 200, 'public, max-age=300');
+            return json(result, 200, `public, max-age=${result.cacheMaxAge || 300}`);
         }
 
         // ============================================================
@@ -51,8 +58,9 @@ export default async function (req) {
             const result = await metaHandler({
                 id: decodeURIComponent(id),
                 type,
+                config: appConfig,
             });
-            return json(result, 200, 'public, max-age=1800');
+            return json(result, 200, `public, max-age=${result.cacheMaxAge || 1800}`);
         }
 
         // ============================================================
@@ -64,8 +72,12 @@ export default async function (req) {
             const result = await streamHandler({
                 id: decodeURIComponent(id),
                 type,
+                config: appConfig,
             });
-            return json(result, 200, 'public, max-age=60');
+            const extraHeaders = {
+                'X-Cache': result._fromCache ? 'HIT' : 'MISS',
+            };
+            return json(result, 200, `public, max-age=${result.cacheMaxAge || 60}`, extraHeaders);
         }
 
         return new Response('Not Found', { status: 404 });
@@ -74,10 +86,11 @@ export default async function (req) {
     }
 }
 
-function json(data, status = 200, cacheControl) {
+function json(data, status = 200, cacheControl, extraHeaders = {}) {
     const headers = {
         'Content-Type': 'application/json; charset=utf-8',
         ...cors(),
+        ...extraHeaders,
     };
     if (cacheControl) headers['Cache-Control'] = cacheControl;
     return new Response(JSON.stringify(data), { status, headers });

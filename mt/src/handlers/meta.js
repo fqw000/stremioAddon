@@ -1,32 +1,56 @@
 /**
- * Meta 详情处理器
+ * Meta 详情处理器（已接入缓存与负缓存）
  */
 
 import { getActiveHost, fetchHtml } from '../fetch.js';
 import { parseDetail } from '../parser.js';
+import { withCache, negSet, TTL } from '../cache.js';
 
 export async function metaHandler({ id, type }) {
     const m = id.match(/^mtyy_(\d+)$/);
-    if (!m) return { meta: null };
+    if (!m) return { meta: null, cacheMaxAge: 60 };
 
     const vid = m[1];
+    const cacheKey = `meta:${vid}`;
 
     try {
         const host = await getActiveHost();
-        const html = await fetchHtml(`${host}/voddetail/${vid}.html`);
-        if (!html) return { meta: null };
-
-        const d = parseDetail(html, vid);
-        if (!d.name) return { meta: null };
 
         // ============================================================
-        // videos 数组：只输出非加密线路（NBY 已过滤）
-        // id 格式：mtyy_{vid}:{sid}:{nid}
+        // 1. 缓存读取或回源
         // ============================================================
-        const videos = d.isMovie
+        const { value: detail, fromCache } = await withCache(cacheKey, TTL.META, async () => {
+            const html = await fetchHtml(`${host}/voddetail/${vid}.html`);
+            if (!html) {
+                // 请求失败，写负缓存 10 分钟
+                await negSet(`meta:${vid}`, TTL.NEG_META);
+                return null;
+            }
+
+            const d = parseDetail(html, vid);
+            if (!d.name) {
+                // 解析成功但没拿到有效内容（比如影片被删），写负缓存
+                await negSet(`meta:${vid}`, TTL.NEG_META);
+                return null;
+            }
+
+            return d;
+        });
+
+        // ============================================================
+        // 2. 空结果处理
+        // ============================================================
+        if (!detail) {
+            return { meta: null, cacheMaxAge: TTL.NEG_META };
+        }
+
+        // ============================================================
+        // 3. 组装 videos（过滤 NBY 加密线路）
+        // ============================================================
+        const videos = detail.isMovie
             ? undefined
-            : d.lines
-                .filter(line => !line.encrypted)
+            : detail.lines
+                .filter(line => !line.encrypted) // 红线：NBY 不输出
                 .flatMap(line =>
                     line.episodes.map((ep, idx) => ({
                         id: `mtyy_${ep.vid}:${ep.sid}:${ep.nid}`,
@@ -36,22 +60,28 @@ export async function metaHandler({ id, type }) {
                     }))
                 );
 
+        // ============================================================
+        // 4. 返回 Meta
+        // ============================================================
         return {
             meta: {
-                id: `mtyy_${d.vid}`,
-                type: d.isMovie ? 'movie' : 'series',
-                name: d.name,
-                poster: d.pic || undefined,
-                description: d.desc || undefined,
-                releaseInfo: d.year || undefined,
-                imdbRating: d.rating || undefined,
-                director: d.directors.length ? d.directors : undefined,
-                cast: d.cast.length ? d.cast.slice(0, 10) : undefined,
-                genres: d.genres.length ? d.genres : undefined,
+                id: `mtyy_${detail.vid}`,
+                type: detail.isMovie ? 'movie' : 'series',
+                name: detail.name,
+                poster: detail.pic || undefined,
+                description: detail.desc || undefined,
+                releaseInfo: detail.year || undefined,
+                imdbRating: detail.rating || undefined,
+                director: detail.directors.length ? detail.directors : undefined,
+                cast: detail.cast.length ? detail.cast.slice(0, 10) : undefined,
+                genres: detail.genres.length ? detail.genres : undefined,
                 videos,
             },
+            cacheMaxAge: TTL.META,
+            _fromCache: fromCache,
         };
     } catch (e) {
-        return { meta: null };
+        // 全局兜底（比如域名全挂）
+        return { meta: null, cacheMaxAge: 60 };
     }
 }

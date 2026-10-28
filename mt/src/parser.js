@@ -190,17 +190,16 @@ export function parseDetail(html, vid) {
  *   - null: 完全解析失败
  */
 export function parsePlayerUrl(html) {
-    // 1. 优先匹配 m3u8
-    const m3u8Match = html.match(/"url"\s*:\s*"([^"]+\.m3u8[^"]*)"/i)
-        || html.match(/"url_next"\s*:\s*"([^"]+\.m3u8[^"]*)"/i);
+    // 1. m3u8 直链（url 或 url_next 两个字段都试）
+    const m3u8Match = html.match(/"url(_next)?"\s*:\s*"([^"]+\.m3u8[^"]*)"/i);
     if (m3u8Match) {
-        return m3u8Match[1].replace(/\\\//g, '/');
+        return m3u8Match[2].replace(/\\\//g, '/');
     }
 
-    // 2. 检测 NBY 加密
-    const nbyMatch = html.match(/"url"\s*:\s*"(NBY-[^"]+)"/i);
+    // 2. NBY 加密（url 或 url_next 两个字段都试）
+    const nbyMatch = html.match(/"url(_next)?"\s*:\s*"(NBY-[^"]+)"/i);
     if (nbyMatch) {
-        return { type: 'nby', raw: nbyMatch[1] };
+        return { type: 'nby', raw: nbyMatch[2] };
     }
 
     return null;
