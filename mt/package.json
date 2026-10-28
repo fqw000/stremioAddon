@@ -1,0 +1,13 @@
+{
+    "name": "mtyy-addon",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "麦田影院 Stremio Addon",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "dev": "vercel dev",
+        "deploy": "vercel --prod"
+    }
+}

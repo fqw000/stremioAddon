@@ -1,0 +1,23 @@
+export function getManifest() {
+    return {
+        id: 'com.mtyy.stremio',
+        version: '1.0.0',
+        name: '麦田影院',
+        description: '麦田影院影视聚合 · 电影/电视剧/动漫/综艺/短剧',
+        logo: 'https://mtyy5.com/static/ds6/img/desklogo.png',
+        resources: ['catalog', 'meta', 'stream'],
+        types: ['movie', 'series'],
+        catalogs: [
+            { type: 'movie',  id: 'mtyy_movie',   name: '麦田 电影',   extra: [{ name: 'search', isRequired: false }] },
+            { type: 'series', id: 'mtyy_series',  name: '麦田 电视剧', extra: [{ name: 'search', isRequired: false }] },
+            { type: 'series', id: 'mtyy_anime',   name: '麦田 动漫',   extra: [{ name: 'search', isRequired: false }] },
+            { type: 'series', id: 'mtyy_variety', name: '麦田 综艺',   extra: [{ name: 'search', isRequired: false }] },
+            { type: 'series', id: 'mtyy_short',   name: '麦田 短剧',   extra: [{ name: 'search', isRequired: false }] },
+        ],
+        idPrefixes: ['mtyy_'],
+        behaviorHints: {
+            configurable: false,
+            configurationRequired: false,
+        },
+    };
+}
