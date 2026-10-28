@@ -5,3 +5,5 @@ dom*.js
 dump-*.html
 *.test.js
 *.log
+test-*
+clear-*

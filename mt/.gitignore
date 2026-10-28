@@ -8,3 +8,5 @@ dump-*.html
 probe-report.txt
 .vercel
 .env*
+test-*
+clear-*
