@@ -57,7 +57,7 @@ export function generateManifest(options = {}) {
     version: '1.0.0',
     name: 'dpd',
     description: '懂片帝影视资源站 · 支持电影、电视剧、短剧、动漫、综艺、纪录片。兼容站内 ID 与 IMDb ID。',
-    logo: '../favicon.png',
+    logo: 'https://dongpian17.com/assets/app-icon-180.png?v=20260829-dongpiandi-logo-v2',
     resources,
     types: ['movie', 'series'],
     catalogs,
