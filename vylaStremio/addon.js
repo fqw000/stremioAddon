@@ -53,7 +53,7 @@ function buildManifest(config) {
     id: 'org.wangqifei.eu.org.vyla',
     version: '1.2.0',
     name: 'Vyla Multi-Source',
-    logo: './public/favicon.ico',
+    logo: 'https://mintcdn.com/vyla/ua6nLrOtWS-jQw28/logo/dark.png?fit=max&auto=format&n=ua6nLrOtWS-jQw28&q=85&s=241b31e7c2d7217f583396e08fd77ae5',
     description: `Vyla 多源（${config.sources.length} 个源）+ 中英字幕`,
     resources: ['stream', 'subtitles'],
     types: ['movie', 'series'],
