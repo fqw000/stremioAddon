@@ -1,0 +1,1117 @@
+
+=========== catalog ===========
+[catalog] 请求: page="home"
+[catalog] [payload] page="home" {"page":"home"}
+[catalog] URL: https://trybox.app/_serverFn/8071ddde1fc9ba14bf80594e08c4f8cfb030a79f7bcccfe292835b561fae77a4?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22page%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A1%2C%22s%22%3A%22home%22%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 数据量统计 ===
+{
+  '耗时ms': 8941,
+  '原始大小KB': 713.05,
+  '原始大小Bytes': 730162,
+  '各板块条目数': {
+    trending: 58,
+    popular: 60,
+    topRated: 60,
+    secondary: 55,
+    tertiary: 59,
+    'presets.movie_action': 60,
+    'presets.movie_comedy': 60,
+    'presets.movie_scifi': 60,
+    'presets.tv_crime': 57,
+    'presets.movie_horror': 60,
+    'presets.movie_family': 60,
+    'presets.tv_scifi_fantasy': 59
+  },
+  '各板块去重ID数': {
+    trending: 58,
+    popular: 60,
+    topRated: 60,
+    secondary: 55,
+    tertiary: 59,
+    'presets.movie_action': 60,
+    'presets.movie_comedy': 60,
+    'presets.movie_scifi': 60,
+    'presets.tv_crime': 57,
+    'presets.movie_horror': 60,
+    'presets.movie_family': 60,
+    'presets.tv_scifi_fantasy': 59
+  },
+  '全局去重ID总数': 486
+}
+
+=== 字段完整性 ===
+{
+  total: 708,
+  stats: {
+    id: { present: 708, missing: 0 },
+    title: { present: 708, missing: 0 },
+    overview: { present: 694, missing: 14 },
+    poster_path: { present: 706, missing: 2 },
+    backdrop_path: { present: 706, missing: 2 },
+    vote_average: { present: 708, missing: 0 },
+    release_date: { present: 708, missing: 0 }
+  }
+}
+
+=== 板块摘要 ===
+
+[trending] 58 项
+  1. [tv] 时光代理人 | 2021-04-30 | 评分: 8.195 | id: 123542
+  2. [movie] 人性本兽 | 2026-10-09 | 评分: 7.446 | id: 1236045
+  3. [movie] 火柴盒大电影 | 2026-10-05 | 评分: 7.821 | id: 1148365
+  4. [tv] 魔女嘉莉 | 2026-10-07 | 评分: 8.345 | id: 288673
+  5. [movie] 蜘蛛侠：崭新之日 | 2026-07-29 | 评分: 8.411 | id: 969681
+  ... 还有 53 项
+
+[popular] 60 项
+  1. [movie] 蜘蛛侠：崭新之日 | 2026-07-29 | 评分: 8.411 | id: 969681
+  2. [movie] 生化危机：爆发夜 | 2026-09-16 | 评分: 7.3 | id: 1423191
+  3. [movie] 潜伏6：血域 | 2026-08-19 | 评分: 7.6 | id: 1291595
+  4. [movie] 奥德赛 | 2026-07-15 | 评分: 8.011 | id: 1368337
+  5. [movie] 拨乱行动 | 2026-09-10 | 评分: 6.773 | id: 1228834
+  ... 还有 55 项
+
+[topRated] 60 项
+  1. [movie] 蝙蝠侠：骑士陨落 | 2026-06-23 | 评分: 9.113 | id: 1560520
+  2. [movie] 安昂传奇：最后的气宗 | 2026-07-24 | 评分: 9.1 | id: 980431
+  3. [movie] 奇幻变身大冒险 | 2026-05-01 | 评分: 8.862 | id: 1007757
+  4. [movie] 不期而遇的姐妹 | 2026-03-12 | 评分: 8.832 | id: 1632181
+  5. [movie] 鬼灭之刃：无限城篇 第一章 猗窝座再袭 | 2025-07-18 | 评分: 8.799 | id: 1311031
+  ... 还有 55 项
+
+[secondary] 55 项
+  1. [tv] 时光代理人 | 2021-04-30 | 评分: 8.195 | id: 123542
+  2. [tv] 绿灯军团 | 2026-08-16 | 评分: 8.298 | id: 95350
+  3. [tv] 魔女嘉莉 | 2026-10-07 | 评分: 8.345 | id: 288673
+  4. [tv] 药屋少女的呢喃 | 2023-10-22 | 评分: 8.7 | id: 220542
+  5. [tv] 暗潮之下 | 2026-10-08 | 评分: 7.308 | id: 285322
+  ... 还有 50 项
+
+[tertiary] 59 项
+  1. [tv] 安迪·科恩的现场观察 | 2009-07-16 | 评分: 5.01 | id: 22980
+  2. [tv] 爱·回家之开心速递 | 2017-02-20 | 评分: 5.4 | id: 91759
+  3. [tv] 与僧侣交合的色欲之夜（僧侣走肾不走心） | 2017-04-03 | 评分: 5.5 | id: 70998
+  4. [tv] 约翰尼·卡森今夜秀 | 1962-10-01 | 评分: 7.562 | id: 2261
+  5. [tv] 法律与秩序：特殊受害者 | 1999-09-20 | 评分: 8 | id: 2734
+  ... 还有 54 项
+
+[presets] 对象，子板块: movie_action, movie_comedy, movie_scifi, tv_crime, movie_horror, movie_family, tv_scifi_fantasy
+  - movie_action: 60 项
+      1. [movie] 蜘蛛侠：崭新之日 | 2026-07-29 | 评分: 8.412 | id: 969681
+      2. [movie] 奥德赛 | 2026-07-15 | 评分: 8.011 | id: 1368337
+      3. [movie] 护肝人 | 2026-09-07 | 评分: 8.3 | id: 1377237
+      ... 还有 57 项
+  - movie_comedy: 60 项
+      1. [movie] 护肝人 | 2026-09-07 | 评分: 8.313 | id: 1377237
+      2. [movie] 歪心狼对阵ACME | 2026-08-17 | 评分: 7.502 | id: 1204680
+      3. [movie] 玩具总动员5 | 2026-06-17 | 评分: 8.292 | id: 1084244
+      ... 还有 57 项
+  - movie_scifi: 60 项
+      1. [movie] 蜘蛛侠：崭新之日 | 2026-07-29 | 评分: 8.412 | id: 969681
+      2. [movie] 生化危机：爆发夜 | 2026-09-16 | 评分: 7.33 | id: 1423191
+      3. [movie] Resident Evil: Welcome to Raccoon City | 2021-11-24 | 评分: 5.951 | id: 460458
+      ... 还有 57 项
+  - tv_crime: 57 项
+      1. [tv] 法律与秩序：特殊受害者 | 1999-09-20 | 评分: 7.957 | id: 2734
+      2. [tv] 侠探杰克 | 2022-02-03 | 评分: 8.134 | id: 108978
+      3. [tv] 法律与秩序 | 1990-09-13 | 评分: 7.284 | id: 549
+      ... 还有 54 项
+  - movie_horror: 60 项
+      1. [movie] 生化危机：爆发夜 | 2026-09-16 | 评分: 7.329 | id: 1423191
+      2. [movie] 潜伏6：血域 | 2026-08-19 | 评分: 7.6 | id: 1291595
+      3. [movie] Resident Evil: Welcome to Raccoon City | 2021-11-24 | 评分: 5.949 | id: 460458
+      ... 还有 57 项
+  - movie_family: 60 项
+      1. [movie] 歪心狼对阵ACME | 2026-08-17 | 评分: 7.5 | id: 1204680
+      2. [movie] 玩具总动员5 | 2026-06-17 | 评分: 8.3 | id: 1084244
+      3. [movie] 海洋奇缘：启航 | 2026-07-08 | 评分: 7.442 | id: 1108427
+      ... 还有 57 项
+  - tv_scifi_fantasy: 59 项
+      1. [tv] 哆啦A梦 | 2005-04-22 | 评分: 8.1 | id: 65733
+      2. [tv] 邪恶力量 | 2005-09-13 | 评分: 8.315 | id: 1622
+      3. [tv] 绿灯军团 | 2026-08-16 | 评分: 8.307 | id: 95350
+      ... 还有 56 项
+
+=========== search ===========
+
+────────────────────────────────────────
+[search] 请求: query="阿甘正传", type="multi"
+[search] [payload] query="阿甘正传", type="multi" {"query":"阿甘正传","type":"multi"}
+[search] URL: https://trybox.app/_serverFn/4554bac009cb7b0dd4f23b35e6381cde80f8891f6cd2c529ecb25d91e64f42ba?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22query%22%2C%22type%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A1%2C%22s%22%3A%22%E9%98%BF%E7%94%98%E6%AD%A3%E4%BC%A0%22%7D%2C%7B%22t%22%3A1%2C%22s%22%3A%22multi%22%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 数据量统计 ===
+{
+  '耗时ms': 2156.6,
+  '原始大小KB': 1.28,
+  '原始大小Bytes': 1313,
+  '顶层字段': [ '0' ],
+  '各数组条目数': { '': 1 }
+}
+
+=== 字段完整性 ===
+{
+  total: 1,
+  stats: {
+    id: { present: 1, missing: 0 },
+    title: { present: 1, missing: 0 },
+    name: { present: 0, missing: 1 },
+    overview: { present: 1, missing: 0 },
+    poster_path: { present: 1, missing: 0 },
+    backdrop_path: { present: 1, missing: 0 },
+    vote_average: { present: 1, missing: 0 },
+    release_date: { present: 1, missing: 0 },
+    first_air_date: { present: 0, missing: 1 },
+    media_type: { present: 1, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+
+[(根数组)] 1 项
+  1. [movie] 阿甘正传 | 1994-06-23 | 评分: 8.461 | id: 13
+
+────────────────────────────────────────
+[search] 请求: query="阿甘正传", type="movie"
+[search] [payload] query="阿甘正传", type="movie" {"query":"阿甘正传","type":"movie"}
+[search] URL: https://trybox.app/_serverFn/4554bac009cb7b0dd4f23b35e6381cde80f8891f6cd2c529ecb25d91e64f42ba?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22query%22%2C%22type%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A1%2C%22s%22%3A%22%E9%98%BF%E7%94%98%E6%AD%A3%E4%BC%A0%22%7D%2C%7B%22t%22%3A1%2C%22s%22%3A%22movie%22%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 数据量统计 ===
+{
+  '耗时ms': 997.1,
+  '原始大小KB': 1.28,
+  '原始大小Bytes': 1311,
+  '顶层字段': [ '0' ],
+  '各数组条目数': { '': 1 }
+}
+
+=== 字段完整性 ===
+{
+  total: 1,
+  stats: {
+    id: { present: 1, missing: 0 },
+    title: { present: 1, missing: 0 },
+    name: { present: 0, missing: 1 },
+    overview: { present: 1, missing: 0 },
+    poster_path: { present: 1, missing: 0 },
+    backdrop_path: { present: 1, missing: 0 },
+    vote_average: { present: 1, missing: 0 },
+    release_date: { present: 1, missing: 0 },
+    first_air_date: { present: 0, missing: 1 },
+    media_type: { present: 1, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+
+[(根数组)] 1 项
+  1. [movie] 阿甘正传 | 1994-06-23 | 评分: 8.5 | id: 13
+
+────────────────────────────────────────
+[search] 请求: query="阿甘正传", type="tv"
+[search] [payload] query="阿甘正传", type="tv" {"query":"阿甘正传","type":"tv"}
+[search] URL: https://trybox.app/_serverFn/4554bac009cb7b0dd4f23b35e6381cde80f8891f6cd2c529ecb25d91e64f42ba?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22query%22%2C%22type%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A1%2C%22s%22%3A%22%E9%98%BF%E7%94%98%E6%AD%A3%E4%BC%A0%22%7D%2C%7B%22t%22%3A1%2C%22s%22%3A%22tv%22%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 数据量统计 ===
+{
+  '耗时ms': 546.7,
+  '原始大小KB': 0.14,
+  '原始大小Bytes': 147,
+  '顶层字段': [],
+  '各数组条目数': { '': 0 }
+}
+
+=== 字段完整性 ===
+{
+  total: 0,
+  stats: {
+    id: { present: 0, missing: 0 },
+    title: { present: 0, missing: 0 },
+    name: { present: 0, missing: 0 },
+    overview: { present: 0, missing: 0 },
+    poster_path: { present: 0, missing: 0 },
+    backdrop_path: { present: 0, missing: 0 },
+    vote_average: { present: 0, missing: 0 },
+    release_date: { present: 0, missing: 0 },
+    first_air_date: { present: 0, missing: 0 },
+    media_type: { present: 0, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+
+[(根数组)] 0 项
+
+=========== meta ===========
+[meta] 请求: type=tv, id=76331
+[meta] [payload] type=tv, id=76331 {"type":"tv","id":76331}
+[meta] URL: https://trybox.app/_serverFn/44b25540de850d9a6aa33c2f3333282561e7954b1805fa7e0ab1e5862f1123bc?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22type%22%2C%22id%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A1%2C%22s%22%3A%22tv%22%7D%2C%7B%22t%22%3A0%2C%22s%22%3A76331%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 数据量统计 ===
+{
+  '耗时ms': 2092.6,
+  '原始大小KB': 41.92,
+  '原始大小Bytes': 42930,
+  '顶层字段': [
+    'id',                   'media_type',
+    'title',                'tagline',
+    'overview',             'backdrop_path',
+    'poster_path',          'logo_path',
+    'backdrops',            'release_date',
+    'runtime',              'status',
+    'original_language',    'genres',
+    'vote_average',         'vote_count',
+    'homepage',             'imdb_id',
+    'production_companies', 'trailer_key',
+    'videos',               'cast',
+    'directors',            'creators',
+    'recommendations',      'watch_providers',
+    'seasons',              'number_of_seasons',
+    'number_of_episodes'
+  ],
+  '各数组条目数': {
+    backdrops: 68,
+    genres: 2,
+    production_companies: 5,
+    videos: 11,
+    cast: 13,
+    directors: 0,
+    creators: 1,
+    recommendations: 20,
+    'watch_providers.flatrate': 2,
+    'watch_providers.rent': 0,
+    'watch_providers.buy': 4,
+    seasons: 4
+  }
+}
+
+=== 字段完整性 ===
+{
+  id: { type: 'number', present: 1, missing: 0 },
+  media_type: { type: 'string', present: 1, missing: 0 },
+  title: { type: 'string', present: 1, missing: 0 },
+  tagline: { type: 'string', present: 1, missing: 0 },
+  overview: { type: 'string', present: 1, missing: 0 },
+  backdrop_path: { type: 'string', present: 1, missing: 0 },
+  poster_path: { type: 'string', present: 1, missing: 0 },
+  logo_path: { type: 'string', present: 1, missing: 0 },
+  backdrops: { type: 'array(68)', present: 1, missing: 0 },
+  release_date: { type: 'string', present: 1, missing: 0 },
+  runtime: { type: 'null', present: 0, missing: 1 },
+  status: { type: 'string', present: 1, missing: 0 },
+  original_language: { type: 'string', present: 1, missing: 0 },
+  genres: { type: 'array(2)', present: 1, missing: 0 },
+  vote_average: { type: 'number', present: 1, missing: 0 },
+  vote_count: { type: 'number', present: 1, missing: 0 },
+  homepage: { type: 'string', present: 1, missing: 0 },
+  imdb_id: { type: 'string', present: 1, missing: 0 },
+  production_companies: { type: 'array(5)', present: 1, missing: 0 },
+  trailer_key: { type: 'string', present: 1, missing: 0 },
+  videos: { type: 'array(11)', present: 1, missing: 0 },
+  cast: { type: 'array(13)', present: 1, missing: 0 },
+  directors: { type: 'array(0)', present: 1, missing: 0 },
+  creators: { type: 'array(1)', present: 1, missing: 0 },
+  recommendations: { type: 'array(20)', present: 1, missing: 0 },
+  watch_providers: { type: 'object(4)', present: 1, missing: 0 },
+  seasons: { type: 'array(4)', present: 1, missing: 0 },
+  number_of_seasons: { type: 'number', present: 1, missing: 0 },
+  number_of_episodes: { type: 'number', present: 1, missing: 0 }
+}
+
+=== 内容摘要 ===
+[基础字段] {
+  id: 76331,
+  title: '继承之战',
+  media_type: 'tv',
+  release_date: '2018-06-03',
+  vote_average: 8.303,
+  vote_count: 1803,
+  status: 'Ended',
+  tagline: 'Make your move.',
+  number_of_seasons: 4,
+  number_of_episodes: 39
+}
+[剧集信息] 共 4 季，39 集，单集时长未知
+[overview] 传媒巨头洛根·罗伊逐渐退出公司管理，四个子女围绕家族企业的控制权展开争夺，权力、财富与家庭关系不断交织。
+[genres] 剧情، 喜剧
+[cast] 杰里米·斯特朗، 基兰·卡尔金، 莎拉·斯努克، 布莱恩·考克斯، 马修·麦克费登، more (共 13 位)
+[videos] 11 个视频, 其中 11 个预告片
+
+[seasons] 4 项 — 每项完整字段如下
+  1. {
+  air_date: '2018-06-03',
+  episode_count: 10,
+  id: 97831,
+  name: '第 1 季',
+  overview: '该剧围绕国际媒体巨头Roy一家的家庭丑闻内幕，这虽是虚构的故事，不过主创表示剧集有影射媒体巨子Sumner Redstone。  　　剧中Logan Roy及他的四个孩子控制着全球最大的媒乐媒体集团之一，年迈的父亲（Brian Cox饰）开始退出公司，而他的孩子则思索如何抓紧机会继承这帝国。',
+  poster_path: '/hS62paPx7Ls3c6voXcXJzJNaTG4.jpg',
+  season_number: 1,
+  vote_average: 7.7
+}
+  2. {
+  air_date: '2019-08-11',
+  episode_count: 10,
+  id: 123438,
+  name: '第 2 季',
+  overview: 'HBO宣布续订商战剧《继承人》第2季，该剧6月3日刚开播，口碑不错。由亚当·麦凯(《大空头》)打造，讲述罗伊家族的故事，该家族掌控着世界上最大的媒体和娱乐企业之一，长子Kendall希望能在父亲退休后接管公司，然而这个幻想被父亲亲手破灭，为家族权力斗争奠定了基础。',
+  poster_path: '/hXuVhMxi3ZNzfBY8h7Hiiotmjiy.jpg',
+  season_number: 2,
+  vote_average: 8.3
+}
+  3. {
+  air_date: '2021-10-17',
+  episode_count: 9,
+  id: 201216,
+  name: '第 3 季',
+  overview: '故事将承接第2季末，洛根·罗伊被他叛逆的儿子肯德尔伏击，为了确保家族、政治和金融联盟的安全，一场激烈的企业斗争有可能演变成一场家庭内战……',
+  poster_path: '/zOFosA3Ew4xW9jsoWYU2ou16a5F.jpg',
+  season_number: 3,
+  vote_average: 8.1
+}
+  4. {
+  air_date: '2023-03-26',
+  episode_count: 10,
+  id: 298958,
+  name: '第 4 季',
+  overview: '将传媒集团Waystar Royco出售给科技界远见家Lukas Matsson的交易越来越接近达成。这场重大交易成功的可能性，激起了Roy一家的存在焦虑和分裂，因为他们预见到一旦交易完成，自己的生活会变成什么样。家族成员认为他们在文化和政治上的地位在未来会被严重削弱，一场权力的斗争随之而来。',
+  poster_path: '/rIGO15WSt2OcgSEYJEvJQJIY1Kj.jpg',
+  season_number: 4,
+  vote_average: 8.5
+}
+
+[seasons 关键字段]
+  S01 | 第 1 季 | 集数: 10 | 首播: 2018-06-03 | id: 97831
+  S02 | 第 2 季 | 集数: 10 | 首播: 2019-08-11 | id: 123438
+  S03 | 第 3 季 | 集数: 9 | 首播: 2021-10-17 | id: 201216
+  S04 | 第 4 季 | 集数: 10 | 首播: 2023-03-26 | id: 298958
+
+[episodes] 根据 meta 季数（4 季）逐季获取剧集列表，TV id = 76331
+[episodes] 请求: tvId=76331, season=1
+[episodes] [payload] tvId=76331, season=1 {"id":76331,"season":1}
+[episodes] URL: https://trybox.app/_serverFn/e554914846470475f9970c596196d2e827879f8fdf88f392107c1218acba9687?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22id%22%2C%22season%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A0%2C%22s%22%3A76331%7D%2C%7B%22t%22%3A0%2C%22s%22%3A1%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 剧集列表 S01 ===
+共 10 集，耗时 565.0ms
+
+=== 数据量统计 ===
+{
+  '耗时ms': 565,
+  '原始大小KB': 7.01,
+  '原始大小Bytes': 7178,
+  '剧集数': 10,
+  '有简介': 10,
+  '有剧照': 10,
+  '有时长': 10,
+  '有评分': 10,
+  '平均时长': 58.9,
+  '平均评分': 7.741,
+  '首播日期范围': '2018-06-03 ~ 2018-08-05'
+}
+
+=== 字段完整性 ===
+{
+  total: 10,
+  stats: {
+    id: { present: 10, missing: 0 },
+    episode_number: { present: 10, missing: 0 },
+    name: { present: 10, missing: 0 },
+    overview: { present: 10, missing: 0 },
+    still_path: { present: 10, missing: 0 },
+    runtime: { present: 10, missing: 0 },
+    air_date: { present: 10, missing: 0 },
+    vote_average: { present: 10, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+  E01 | 庆祝 | 62 分钟 | 2018-06-03 评分 7.7
+  E02 | 狗屎时刻狗屎秀 | 59 分钟 | 2018-06-10 评分 7.432
+  E03 | 救生艇 | 58 分钟 | 2018-06-17 评分 7.242
+  E04 | 捕蜂陷阱磨砖成镜 | 58 分钟 | 2018-06-24 评分 7.609
+  E05 | 我去了市集 | 56 分钟 | 2018-07-01 评分 7.7
+  E06 | 你站哪一边 | 58 分钟 | 2018-07-08 评分 8
+  E07 | 奥斯特里茨 | 58 分钟 | 2018-07-15 评分 7.8
+  E08 | 布拉格 | 56 分钟 | 2018-07-22 评分 7.7
+  E09 | 婚前 | 58 分钟 | 2018-07-29 评分 7.821
+  E10 | 无人失踪 | 66 分钟 | 2018-08-05 评分 8.41
+
+[episodes] tvId=76331, season=1 完成，共 10 集（耗时 568.7ms）
+[episodes] 请求: tvId=76331, season=2
+[episodes] [payload] tvId=76331, season=2 {"id":76331,"season":2}
+[episodes] URL: https://trybox.app/_serverFn/e554914846470475f9970c596196d2e827879f8fdf88f392107c1218acba9687?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22id%22%2C%22season%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A0%2C%22s%22%3A76331%7D%2C%7B%22t%22%3A0%2C%22s%22%3A2%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 剧集列表 S02 ===
+共 10 集，耗时 992.2ms
+
+=== 数据量统计 ===
+{
+  '耗时ms': 992.2,
+  '原始大小KB': 4.28,
+  '原始大小Bytes': 4382,
+  '剧集数': 10,
+  '有简介': 10,
+  '有剧照': 10,
+  '有时长': 10,
+  '有评分': 10,
+  '平均时长': 60,
+  '平均评分': 8.297,
+  '首播日期范围': '2019-08-11 ~ 2019-10-13'
+}
+
+=== 字段完整性 ===
+{
+  total: 10,
+  stats: {
+    id: { present: 10, missing: 0 },
+    episode_number: { present: 10, missing: 0 },
+    name: { present: 10, missing: 0 },
+    overview: { present: 10, missing: 0 },
+    still_path: { present: 10, missing: 0 },
+    runtime: { present: 10, missing: 0 },
+    air_date: { present: 10, missing: 0 },
+    vote_average: { present: 10, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+  E01 | 夏宫 | 59 分钟 | 2019-08-11 评分 8.04
+  E02 | 跃者 | 58 分钟 | 2019-08-18 评分 8.074
+  E03 | 狩猎 | 59 分钟 | 2019-08-25 评分 8.061
+  E04 | 安全屋 | 58 分钟 | 2019-09-01 评分 8.3
+  E05 | 燕鸥避 | 60 分钟 | 2019-09-08 评分 8.627
+  E06 | 西风悦 | 58 分钟 | 2019-09-15 评分 8.3
+  E07 | 回 | 58 分钟 | 2019-09-22 评分 7.929
+  E08 | 邓迪 | 60 分钟 | 2019-09-29 评分 8.2
+  E09 | 华府 | 61 分钟 | 2019-10-06 评分 8.34
+  E10 | 不为泪水 | 69 分钟 | 2019-10-13 评分 9.1
+
+[episodes] tvId=76331, season=2 完成，共 10 集（耗时 993.6ms）
+[episodes] 请求: tvId=76331, season=3
+[episodes] [payload] tvId=76331, season=3 {"id":76331,"season":3}
+[episodes] URL: https://trybox.app/_serverFn/e554914846470475f9970c596196d2e827879f8fdf88f392107c1218acba9687?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22id%22%2C%22season%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A0%2C%22s%22%3A76331%7D%2C%7B%22t%22%3A0%2C%22s%22%3A3%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 剧集列表 S03 ===
+共 9 集，耗时 766.0ms
+
+=== 数据量统计 ===
+{
+  '耗时ms': 766,
+  '原始大小KB': 4.35,
+  '原始大小Bytes': 4456,
+  '剧集数': 9,
+  '有简介': 9,
+  '有剧照': 9,
+  '有时长': 9,
+  '有评分': 9,
+  '平均时长': 59.9,
+  '平均评分': 8.09,
+  '首播日期范围': '2021-10-17 ~ 2021-12-12'
+}
+
+=== 字段完整性 ===
+{
+  total: 9,
+  stats: {
+    id: { present: 9, missing: 0 },
+    episode_number: { present: 9, missing: 0 },
+    name: { present: 9, missing: 0 },
+    overview: { present: 9, missing: 0 },
+    still_path: { present: 9, missing: 0 },
+    runtime: { present: 9, missing: 0 },
+    air_date: { present: 9, missing: 0 },
+    vote_average: { present: 9, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+  E01 | 脱队 | 57 分钟 | 2021-10-17 评分 8.02
+  E02 | 战时多数派 | 59 分钟 | 2021-10-24 评分 7.9
+  E03 | 干扰 | 59 分钟 | 2021-10-31 评分 8
+  E04 | 草场上的狮子 | 59 分钟 | 2021-11-07 评分 7.8
+  E05 | 爱达华州退休清洁工 | 60 分钟 | 2021-11-14 评分 8.089
+  E06 | 代价 | 58 分钟 | 2021-11-21 评分 7.7
+  E07 | 过多的生日派对 | 58 分钟 | 2021-11-28 评分 8
+  E08 | 托斯卡纳 | 64 分钟 | 2021-12-05 评分 8.3
+  E09 | 丧钟为谁而鸣 | 65 分钟 | 2021-12-12 评分 9
+
+[episodes] tvId=76331, season=3 完成，共 9 集（耗时 767.9ms）
+[episodes] 请求: tvId=76331, season=4
+[episodes] [payload] tvId=76331, season=4 {"id":76331,"season":4}
+[episodes] URL: https://trybox.app/_serverFn/e554914846470475f9970c596196d2e827879f8fdf88f392107c1218acba9687?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22id%22%2C%22season%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A0%2C%22s%22%3A76331%7D%2C%7B%22t%22%3A0%2C%22s%22%3A4%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 剧集列表 S04 ===
+共 10 集，耗时 2016.9ms
+
+=== 数据量统计 ===
+{
+  '耗时ms': 2016.9,
+  '原始大小KB': 4.72,
+  '原始大小Bytes': 4830,
+  '剧集数': 10,
+  '有简介': 10,
+  '有剧照': 10,
+  '有时长': 10,
+  '有评分': 10,
+  '平均时长': 65.7,
+  '平均评分': 8.498,
+  '首播日期范围': '2023-03-26 ~ 2023-05-28'
+}
+
+=== 字段完整性 ===
+{
+  total: 10,
+  stats: {
+    id: { present: 10, missing: 0 },
+    episode_number: { present: 10, missing: 0 },
+    name: { present: 10, missing: 0 },
+    overview: { present: 10, missing: 0 },
+    still_path: { present: 10, missing: 0 },
+    runtime: { present: 10, missing: 0 },
+    air_date: { present: 10, missing: 0 },
+    vote_average: { present: 10, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+  E01 | 怪胎一家 | 61 分钟 | 2023-03-26 评分 7.825
+  E02 | 婚礼彩排 | 59 分钟 | 2023-04-02 评分 7.9
+  E03 | 康纳的婚礼 | 62 分钟 | 2023-04-09 评分 9.234
+  E04 | 蜜月期 | 60 分钟 | 2023-04-16 评分 8.245
+  E05 | 清洗名单 | 61 分钟 | 2023-04-23 评分 8.627
+  E06 | 生活+ | 63 分钟 | 2023-04-30 评分 7.848
+  E07 | 尾牙派对 | 62 分钟 | 2023-05-07 评分 8.3
+  E08 | 美国定夺 | 66 分钟 | 2023-05-14 评分 8.8
+  E09 | 教堂与国家 | 74 分钟 | 2023-05-21 评分 9
+  E10 | 睁开双眼 | 89 分钟 | 2023-05-28 评分 9.2
+
+[episodes] tvId=76331, season=4 完成，共 10 集（耗时 2019.3ms）
+
+[backdrops] 68 项
+  1. {"file_path":"/d87JXX3DLkRJMfm5StCmmnmhHuX.jpg","width":3840
+  2. {"file_path":"/bcdUYUFk8GdpZJPiSAas9UeocLH.jpg","width":3840
+  3. {"file_path":"/zZ3Cv1lz61V9OXXvtCPVtCFTVP7.jpg","width":3840
+  ... 还有 65 项
+
+[production_companies] 5 项
+  1. Gary Sanchez Productions
+  2. Hyperobject Industries
+  3. Project Zeus
+  ... 还有 2 项
+
+[directors] 0 项
+
+[creators] 1 项
+  1. 杰西·阿姆斯特朗
+
+[recommendations] 20 项
+  1. 无耻之徒
+  2. 富贵浮云
+  3. 大哥大姐没出息
+  ... 还有 17 项
+
+[watch_providers.flatrate] 2 项
+  1. {"logo_path":"/64fLWeSyZ1KQZhIdvTdy4QHeWty.png","provider_id
+  2. {"logo_path":"/skypuy7SXuugIQeYg0IglmzoKaS.png","provider_id
+
+[watch_providers.rent] 0 项
+
+[watch_providers.buy] 4 项
+  1. {"logo_path":"/jn6TLbtaTZntTRX9UYucHJvpQx1.png","provider_id
+  2. {"logo_path":"/qdEGArH3lKfFnAtYXMkSYk5wxuG.png","provider_id
+  3. {"logo_path":"/aZRENwYILujqs0RVOZutTh0BVGV.png","provider_id
+  ... 还有 1 项
+
+=========== episodes ===========
+[episodes] 请求: tvId=76331, season=1
+[episodes] [payload] tvId=76331, season=1 {"id":76331,"season":1}
+[episodes] URL: https://trybox.app/_serverFn/e554914846470475f9970c596196d2e827879f8fdf88f392107c1218acba9687?payload=%7B%22t%22%3A%7B%22t%22%3A10%2C%22i%22%3A0%2C%22p%22%3A%7B%22k%22%3A%5B%22data%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A10%2C%22i%22%3A1%2C%22p%22%3A%7B%22k%22%3A%5B%22id%22%2C%22season%22%5D%2C%22v%22%3A%5B%7B%22t%22%3A0%2C%22s%22%3A76331%7D%2C%7B%22t%22%3A0%2C%22s%22%3A1%7D%5D%7D%2C%22o%22%3A0%7D%5D%7D%2C%22o%22%3A0%7D%2C%22f%22%3A127%2C%22m%22%3A%5B%5D%7D
+
+=== 剧集列表 S01 ===
+共 10 集，耗时 985.5ms
+
+=== 数据量统计 ===
+{
+  '耗时ms': 985.5,
+  '原始大小KB': 7.01,
+  '原始大小Bytes': 7178,
+  '剧集数': 10,
+  '有简介': 10,
+  '有剧照': 10,
+  '有时长': 10,
+  '有评分': 10,
+  '平均时长': 58.9,
+  '平均评分': 7.741,
+  '首播日期范围': '2018-06-03 ~ 2018-08-05'
+}
+
+=== 字段完整性 ===
+{
+  total: 10,
+  stats: {
+    id: { present: 10, missing: 0 },
+    episode_number: { present: 10, missing: 0 },
+    name: { present: 10, missing: 0 },
+    overview: { present: 10, missing: 0 },
+    still_path: { present: 10, missing: 0 },
+    runtime: { present: 10, missing: 0 },
+    air_date: { present: 10, missing: 0 },
+    vote_average: { present: 10, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+  E01 | 庆祝 | 62 分钟 | 2018-06-03 评分 7.7
+  E02 | 狗屎时刻狗屎秀 | 59 分钟 | 2018-06-10 评分 7.432
+  E03 | 救生艇 | 58 分钟 | 2018-06-17 评分 7.242
+  E04 | 捕蜂陷阱磨砖成镜 | 58 分钟 | 2018-06-24 评分 7.609
+  E05 | 我去了市集 | 56 分钟 | 2018-07-01 评分 7.7
+  E06 | 你站哪一边 | 58 分钟 | 2018-07-08 评分 8
+  E07 | 奥斯特里茨 | 58 分钟 | 2018-07-15 评分 7.8
+  E08 | 布拉格 | 56 分钟 | 2018-07-22 评分 7.7
+  E09 | 婚前 | 58 分钟 | 2018-07-29 评分 7.821
+  E10 | 无人失踪 | 66 分钟 | 2018-08-05 评分 8.41
+
+=========== subtitle ===========
+
+────────────────────────────────────────
+[subtitle] 变体: 仅 imdb_id
+[subtitle] 请求参数: {"imdbId":"tt35538033"}
+[subtitle] [payload] 查询参数（空值会被省略） {"imdbId":"tt35538033"}
+[subtitle] URL: https://trybox.app/api/public/subtitles?imdb_id=tt35538033&v=8
+
+=== 数据量统计 ===
+{
+  '耗时ms': 1942.7,
+  '原始大小KB': 15.9,
+  '原始大小Bytes': 16281,
+  '顶层字段': [ 'subtitles' ],
+  '字幕总数': 53,
+  '语言分布': {
+    id: 8,
+    vi: 6,
+    en: 5,
+    ar: 4,
+    es: 3,
+    ro: 1,
+    tr: 3,
+    bn: 1,
+    sq: 2,
+    uk: 1,
+    fa: 1,
+    sr: 3,
+    br: 1,
+    ja: 2,
+    sk: 1,
+    zh: 1,
+    th: 1,
+    fr: 1,
+    pl: 1,
+    bg: 1,
+    el: 1,
+    cs: 2,
+    de: 1,
+    ru: 1,
+    hr: 1
+  },
+  '来源分布': { SubSource: 18, OpenSubtitles: 35 },
+  '格式分布': { srt: 53 }
+}
+
+=== 字段完整性 ===
+{
+  total: 53,
+  stats: {
+    id: { present: 53, missing: 0 },
+    url: { present: 53, missing: 0 },
+    format: { present: 53, missing: 0 },
+    language: { present: 53, missing: 0 },
+    display: { present: 53, missing: 0 },
+    release: { present: 18, missing: 35 },
+    source: { present: 53, missing: 0 },
+    downloadCount: { present: 53, missing: 0 },
+    isHearingImpaired: { present: 53, missing: 0 },
+    matchScore: { present: 53, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[subtitles] 共 53 条
+[语言] id(8)، vi(6)، en(5)، ar(4)، es(3)، tr(3)، sr(3)، sq(2)، ja(2)، cs(2)، ro(1)، bn(1)، uk(1)، fa(1)، br(1)، sk(1)، zh(1)، th(1)، fr(1)، pl(1)، bg(1)، el(1)، de(1)، ru(1)، hr(1)
+
+[前 10 条]
+  1. [SubSource] id/indonesian | srt | dl=776
+       release: Resident.Evil.2026.TS-DKS(clean).1080p.Indonesia
+  2. [SubSource] id/indonesian | srt | dl=244
+       release: Resident.Evil.2026.TELESYNC.MULTi.x264-BananaNim
+  3. [SubSource] vi/vietnamese | srt | dl=175
+       release: Resident.Evil.2026.Vietnamese
+  4. [SubSource] en/english | srt | dl=157
+       release: Resident.Evil.2026.1080p.MA.WEB-DL.DDP5.1.Atmos.H.264
+  5. [SubSource] id/indonesian | srt | dl=96
+       release: Resident.Evil.2026.1080p.TS.GoWatchSeries.Net
+  6. [SubSource] id/indonesian | srt | dl=85
+       release: Resident.Evilklll.2026 new.TELESYNC.V2.x264-DKS
+  7. [SubSource] ar/arabic | srt | dl=83
+       release: Resident.Evil.2026.TS-DKS(clean).1080p.English
+  8. [SubSource] es/spanish_latin_america | srt | dl=53
+       release: Resident.Evil.2026.1080p.LATINO_NEUTRO
+  9. [SubSource] id/indonesian | srt | dl=46
+       release: Resident.Evil.2026.WEB-DL.DDP5.1.Atmos.H.264
+  10. [SubSource] ro/romanian | srt | dl=42
+       release: Resident.Evil.2026.1080p.TELESYNC.MULTi.x264-DKS
+  ... 还有 43 条
+
+[来源统计]
+  OpenSubtitles: 35
+  SubSource: 18
+
+────────────────────────────────────────
+[subtitle] 变体: imdb_id + language
+[subtitle] 请求参数: {"imdbId":"tt35538033","language":"zh-CN"}
+[subtitle] [payload] 查询参数（空值会被省略） {"imdbId":"tt35538033","language":"zh-CN"}
+[subtitle] URL: https://trybox.app/api/public/subtitles?imdb_id=tt35538033&language=zh-CN&v=8
+
+=== 数据量统计 ===
+{
+  '耗时ms': 2940.8,
+  '原始大小KB': 0.3,
+  '原始大小Bytes': 304,
+  '顶层字段': [ 'subtitles' ],
+  '字幕总数': 1,
+  '语言分布': { zh: 1 },
+  '来源分布': { OpenSubtitles: 1 },
+  '格式分布': { srt: 1 }
+}
+
+=== 字段完整性 ===
+{
+  total: 1,
+  stats: {
+    id: { present: 1, missing: 0 },
+    url: { present: 1, missing: 0 },
+    format: { present: 1, missing: 0 },
+    language: { present: 1, missing: 0 },
+    display: { present: 1, missing: 0 },
+    release: { present: 0, missing: 1 },
+    source: { present: 1, missing: 0 },
+    downloadCount: { present: 1, missing: 0 },
+    isHearingImpaired: { present: 1, missing: 0 },
+    matchScore: { present: 1, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[subtitles] 共 1 条
+[语言] zh(1)
+
+[前 10 条]
+  1. [OpenSubtitles] zh/zho | srt | dl=0
+
+[来源统计]
+  OpenSubtitles: 1
+
+────────────────────────────────────────
+[subtitle] 变体: imdb_id + title + year
+[subtitle] 请求参数: {"imdbId":"tt35538033","title":"生化危机：爆发夜","year":2026}
+[subtitle] [payload] 查询参数（空值会被省略） {"imdbId":"tt35538033","title":"生化危机：爆发夜","year":2026}
+[subtitle] URL: https://trybox.app/api/public/subtitles?imdb_id=tt35538033&title=%E7%94%9F%E5%8C%96%E5%8D%B1%E6%9C%BA%EF%BC%9A%E7%88%86%E5%8F%91%E5%A4%9C&year=2026&v=8
+
+=== 数据量统计 ===
+{
+  '耗时ms': 1481.4,
+  '原始大小KB': 15.9,
+  '原始大小Bytes': 16281,
+  '顶层字段': [ 'subtitles' ],
+  '字幕总数': 53,
+  '语言分布': {
+    id: 8,
+    vi: 6,
+    en: 5,
+    ar: 4,
+    es: 3,
+    ro: 1,
+    tr: 3,
+    bn: 1,
+    sq: 2,
+    uk: 1,
+    fa: 1,
+    sr: 3,
+    br: 1,
+    ja: 2,
+    sk: 1,
+    zh: 1,
+    th: 1,
+    fr: 1,
+    pl: 1,
+    bg: 1,
+    el: 1,
+    cs: 2,
+    de: 1,
+    ru: 1,
+    hr: 1
+  },
+  '来源分布': { SubSource: 18, OpenSubtitles: 35 },
+  '格式分布': { srt: 53 }
+}
+
+=== 字段完整性 ===
+{
+  total: 53,
+  stats: {
+    id: { present: 53, missing: 0 },
+    url: { present: 53, missing: 0 },
+    format: { present: 53, missing: 0 },
+    language: { present: 53, missing: 0 },
+    display: { present: 53, missing: 0 },
+    release: { present: 18, missing: 35 },
+    source: { present: 53, missing: 0 },
+    downloadCount: { present: 53, missing: 0 },
+    isHearingImpaired: { present: 53, missing: 0 },
+    matchScore: { present: 53, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[subtitles] 共 53 条
+[语言] id(8)، vi(6)، en(5)، ar(4)، es(3)، tr(3)، sr(3)، sq(2)، ja(2)، cs(2)، ro(1)، bn(1)، uk(1)، fa(1)، br(1)، sk(1)، zh(1)، th(1)، fr(1)، pl(1)، bg(1)، el(1)، de(1)، ru(1)، hr(1)
+
+[前 10 条]
+  1. [SubSource] id/indonesian | srt | dl=776
+       release: Resident.Evil.2026.TS-DKS(clean).1080p.Indonesia
+  2. [SubSource] id/indonesian | srt | dl=244
+       release: Resident.Evil.2026.TELESYNC.MULTi.x264-BananaNim
+  3. [SubSource] vi/vietnamese | srt | dl=175
+       release: Resident.Evil.2026.Vietnamese
+  4. [SubSource] en/english | srt | dl=157
+       release: Resident.Evil.2026.1080p.MA.WEB-DL.DDP5.1.Atmos.H.264
+  5. [SubSource] id/indonesian | srt | dl=96
+       release: Resident.Evil.2026.1080p.TS.GoWatchSeries.Net
+  6. [SubSource] id/indonesian | srt | dl=85
+       release: Resident.Evilklll.2026 new.TELESYNC.V2.x264-DKS
+  7. [SubSource] ar/arabic | srt | dl=83
+       release: Resident.Evil.2026.TS-DKS(clean).1080p.English
+  8. [SubSource] es/spanish_latin_america | srt | dl=53
+       release: Resident.Evil.2026.1080p.LATINO_NEUTRO
+  9. [SubSource] id/indonesian | srt | dl=46
+       release: Resident.Evil.2026.WEB-DL.DDP5.1.Atmos.H.264
+  10. [SubSource] ro/romanian | srt | dl=42
+       release: Resident.Evil.2026.1080p.TELESYNC.MULTi.x264-DKS
+  ... 还有 43 条
+
+[来源统计]
+  OpenSubtitles: 35
+  SubSource: 18
+
+────────────────────────────────────────
+[subtitle] 变体: 完整参数
+[subtitle] 请求参数: {"imdbId":"tt35538033","title":"生化危机：爆发夜","year":2026,"v":8,"language":"zh-CN"}
+[subtitle] [payload] 查询参数（空值会被省略） {"imdbId":"tt35538033","title":"生化危机：爆发夜","year":2026,"v":8,"language":"zh-CN"}
+[subtitle] URL: https://trybox.app/api/public/subtitles?imdb_id=tt35538033&language=zh-CN&title=%E7%94%9F%E5%8C%96%E5%8D%B1%E6%9C%BA%EF%BC%9A%E7%88%86%E5%8F%91%E5%A4%9C&year=2026&v=8
+
+=== 数据量统计 ===
+{
+  '耗时ms': 2805.8,
+  '原始大小KB': 0.78,
+  '原始大小Bytes': 797,
+  '顶层字段': [ 'subtitles' ],
+  '字幕总数': 2,
+  '语言分布': { zh: 2 },
+  '来源分布': { OpenSubtitles: 1, SubtitleCat: 1 },
+  '格式分布': { srt: 2 }
+}
+
+=== 字段完整性 ===
+{
+  total: 2,
+  stats: {
+    id: { present: 2, missing: 0 },
+    url: { present: 2, missing: 0 },
+    format: { present: 2, missing: 0 },
+    language: { present: 2, missing: 0 },
+    display: { present: 2, missing: 0 },
+    release: { present: 1, missing: 1 },
+    source: { present: 2, missing: 0 },
+    downloadCount: { present: 1, missing: 1 },
+    isHearingImpaired: { present: 1, missing: 1 },
+    matchScore: { present: 2, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[subtitles] 共 2 条
+[语言] zh(2)
+
+[前 10 条]
+  1. [OpenSubtitles] zh/zho | srt | dl=0
+  2. [SubtitleCat] zh/Chinese | srt | dl=?
+       release: Zeta. 2026. 1080p. WEB. h264-EDITH _ Zeta [2026] 2h 12m - Drama, Thriller
+
+[来源统计]
+  OpenSubtitles: 1
+  SubtitleCat: 1
+
+=========== stream ===========
+[stream] 获取 access_token...
+[stream] access_token 剩余有效期: 20 分钟
+[stream] access_token 获取成功
+
+[stream] 请求: movie tmdbId=687163
+[stream] [payload] 解码后的请求体（同时给出原始 seroval 结构） {"data":{"tmdb_id":687163,"kind":"movie"}}
+[stream] [payload:raw] {"t":{"t":10,"i":0,"p":{"k":["data"],"v":[{"t":10,"i":1,"p":{"k":["tmdb_id","kind"],"v":[{"t":0,"s":687163},{"t":1,"s":"movie"}]},"o":0}]},"o":0},"f":127,"m":[]}
+[stream] URL: https://trybox.app/_serverFn/5a020077e9367d29abeab1946108104517a066628ad6d94609eea11918105012
+[stream] 响应顶层键: [ 't', 'i', 'p', 'o' ]
+[stream] 原始响应前 1500 字符:
+{"t":10,"i":0,"p":{"k":["result","error","context"],"v":[{"t":10,"i":1,"p":{"k":["meta","share_key","file_id","file_name","links","mbp_links","beta_links","cache_hit"],"v":[{"t":10,"i":2,"p":{"k":["title","year","imdb_id","altTitles"],"v":[{"t":1,"s":"Project Hail Mary"},{"t":1,"s":"2026"},{"t":1,"s":"tt12042730"},{"t":9,"i":3,"a":[{"t":1,"s":"Projet dernière chance"},{"t":1,"s":"ภารกิจกู้สุริยะ"},{"t":1,"s":"Проект «Аве Мария»"},{"t":1,"s":"Проект «Конец света»"},{"t":1,"s":"مشروع هيل ماري"},{"t":1,"s":"プロジェクト・ヘイル・メアリー"},{"t":1,"s":"Devoradores de Estrelas"},{"t":1,"s":"Projecto Hail Mary"}],"o":0}]},"o":0},{"t":1,"s":""},{"t":1,"s":""},{"t":2,"s":0},{"t":9,"i":4,"a":[],"o":0},{"t":9,"i":5,"a":[{"t":10,"i":6,"p":{"k":["url","size","group","file_id","quality","file_name","vip_locked"],"v":[{"t":1,"s":"https://usa7-as13.shegu.net/vip/p1/org_movie/4/7/3/74993/movie.74993.2026.original.2367994.20260513041505.mkv?KEY1=QXBtSQb08LTOKvjOzmdr8w&KEY2=1791745867&KEY7=23&KEY8=m22042204&KEY0=2"},{"t":0,"s":11534336},{"t":1,"s":"MovieBox"},{"t":1,"s":"2367994"},{"t":1,"s":"ORG"},{"t":2,"s":0},{"t":2,"s":3}]},"o":0},{"t":10,"i":7,"p":{"k":["url","size","group","file_id","quality","file_name","vip_locked"],"v":[{"t":1,"s":"https://hls.shegu.net/38271644.m3u8?quality=1080p&sign=33f5e4242cc8be39827e82fe43bf54f0b6f4d16bMd4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103"},{"t":0,"s":11534336},{"t":1,"s":"MovieBox"},{"t":1,"s":"2367994"},{"t":1,"s":"1080P"}
+
+=== 数据量统计 ===
+{
+  '耗时ms': 1502.9,
+  '原始大小KB': 7.81,
+  '原始大小Bytes': 7999,
+  '顶层字段': [
+    'meta',
+    'share_key',
+    'file_id',
+    'file_name',
+    'links',
+    'mbp_links',
+    'beta_links',
+    'cache_hit'
+  ],
+  '链接总数': 17,
+  '有效链接数': 17,
+  'HLS链接数': 14,
+  'VIP锁定数': 0,
+  '质量分布': { ORG: 3, '1080P': 3, '720P': 3, '360P': 3, AUTO: 3, '4K': 2 },
+  '分组分布': { MovieBox: 17 },
+  '媒体字段': [ 'title', 'year', 'imdb_id', 'altTitles' ]
+}
+
+=== 字段完整性 ===
+{
+  total: 17,
+  stats: {
+    url: { present: 17, missing: 0 },
+    quality: { present: 17, missing: 0 },
+    size: { present: 17, missing: 0 },
+    group: { present: 17, missing: 0 },
+    file_id: { present: 17, missing: 0 },
+    file_name: { present: 0, missing: 17 },
+    vip_locked: { present: 17, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[媒体信息] {
+  title: 'Project Hail Mary',
+  year: '2026',
+  imdbId: 'tt12042730',
+  type: 'movie'
+}
+[streams] 共 17 条
+
+[播放链接]
+  1. 4K | HLS | MovieBox | 大小: 30408704 | VIP: 可用
+     URL: https://hls.shegu.net/38302246.m3u8?quality=4K&sign=251b7e207335a9ad68106400238e1cfc29959d36Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  2. 4K | HLS | MovieBox | 大小: 26214400 | VIP: 可用
+     URL: https://hls.shegu.net/38381244.m3u8?quality=4K&sign=b26526e8475395de4c5cfa5e01b32a767ae9c23dMs5&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  3. 1080P | HLS | MovieBox | 大小: 11534336 | VIP: 可用
+     URL: https://hls.shegu.net/38271644.m3u8?quality=1080p&sign=33f5e4242cc8be39827e82fe43bf54f0b6f4d16bMd4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  4. 1080P | HLS | MovieBox | 大小: 29.17 GB | VIP: 可用
+     URL: https://hls.shegu.net/38302246.m3u8?quality=1080p&sign=71d64d955a44af24faa0b304c563961500e82082Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  5. 1080P | HLS | MovieBox | 大小: 25.43 GB | VIP: 可用
+     URL: https://hls.shegu.net/38381244.m3u8?quality=1080p&sign=e4dfb6f8c1cf72fa0efb92e4a1af51e2da8304d4Ms5&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  6. 720P | HLS | MovieBox | 大小: 11.82 GB | VIP: 可用
+     URL: https://hls.shegu.net/38271644.m3u8?quality=720p&sign=ce80c153aba0dc3d3431b03f4687cf14565180e4Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  7. 720P | HLS | MovieBox | 大小: 29.17 GB | VIP: 可用
+     URL: https://hls.shegu.net/38302246.m3u8?quality=720p&sign=af476a1fd706eddd6c3b0aecda7172e2b10b58d4Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  8. 720P | HLS | MovieBox | 大小: 25.43 GB | VIP: 可用
+     URL: https://hls.shegu.net/38381244.m3u8?quality=720p&sign=0d5ff27f7e4aa85952fb49ffa0f61fc65edfaa81Ms5&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  9. 360P | HLS | MovieBox | 大小: 11.82 GB | VIP: 可用
+     URL: https://hls.shegu.net/38271644.m3u8?quality=360p&sign=d1e06038acce8863f9d8fe868c975a9037daca05Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  10. 360P | HLS | MovieBox | 大小: 29.17 GB | VIP: 可用
+     URL: https://hls.shegu.net/38302246.m3u8?quality=360p&sign=8457710c9887ffd0afd328ae86ed578d7465d631Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+  ... 还有 7 条
+
+[主播放地址] https://hls.shegu.net/38302246.m3u8?quality=4K&sign=251b7e207335a9ad68106400238e1cfc29959d36Md4&t=1791745867&client=mbp&KEY2=1791753067&KEY7=23&KEY8=m22042204&IP=2a06:98c0:3600::103
+
+[stream] 请求: tv tmdbId=2316 S1E5
+[stream] [payload] 解码后的请求体（同时给出原始 seroval 结构） {"data":{"tmdb_id":2316,"kind":"tv","season":1,"episode":5}}
+[stream] [payload:raw] {"t":{"t":10,"i":0,"p":{"k":["data"],"v":[{"t":10,"i":1,"p":{"k":["tmdb_id","kind","season","episode"],"v":[{"t":0,"s":2316},{"t":1,"s":"tv"},{"t":0,"s":1},{"t":0,"s":5}]},"o":0}]},"o":0},"f":127,"m":[]}
+[stream] URL: https://trybox.app/_serverFn/5a020077e9367d29abeab1946108104517a066628ad6d94609eea11918105012
+[stream] 响应顶层键: [ 't', 'i', 'p', 'o' ]
+[stream] 原始响应前 1500 字符:
+{"t":10,"i":0,"p":{"k":["result","error","context"],"v":[{"t":10,"i":1,"p":{"k":["meta","share_key","file_id","file_name","links","mbp_links","beta_links","cache_hit"],"v":[{"t":10,"i":2,"p":{"k":["title","year","imdb_id","altTitles"],"v":[{"t":1,"s":"The Office"},{"t":1,"s":"2005"},{"t":1,"s":"tt0386676"},{"t":9,"i":3,"a":[{"t":1,"s":"Zyra"},{"t":1,"s":"Punë zyre"},{"t":1,"s":"Ofis"},{"t":1,"s":"Vida de Escritório"},{"t":1,"s":"美版办公室"},{"t":1,"s":"我们的办公室"},{"t":1,"s":"The Office (US) – Das Büro"},{"t":1,"s":"The Office (U.S.)"}],"o":0}]},"o":0},{"t":1,"s":""},{"t":1,"s":""},{"t":2,"s":0},{"t":9,"i":4,"a":[],"o":0},{"t":9,"i":5,"a":[{"t":10,"i":6,"p":{"k":["quality","url","size","file_name","file_id","group","vip_locked"],"v":[{"t":1,"s":"ORG"},{"t":1,"s":"https://usa7-nas34.shegu.net/vip/p1/org_tv/1/0/10/1/tv.10.S1E5.original.915163.20190714095501.mp4?KEY1=zCp0VM4soUhXJY6CGVIagg&KEY2=1791747389&KEY7=23&KEY8=m22000153&KEY0=2"},{"t":0,"s":2097152},{"t":1,"s":"The.Office.S01E05.Basketball.1080p.AMZN.WEB-DL.DD2.0.H.264-AJP69.mkv"},{"t":1,"s":"915163"},{"t":1,"s":"MovieBox"},{"t":2,"s":3}]},"o":0},{"t":10,"i":7,"p":{"k":["quality","url","size","file_name","file_id","group","vip_locked"],"v":[{"t":1,"s":"1080P"},{"t":1,"s":"https://hls.shegu.net/73555.m3u8?quality=1080p&sign=b249664c2703c2d617871db525f08874360e5dbeMs5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103"},{"t":0,"s":351272960},{"t":1,"s":"The.Office.S01E05.Basketball.1080p.AMZN.WEB
+
+=== 数据量统计 ===
+{
+  '耗时ms': 3720.3,
+  '原始大小KB': 5.03,
+  '原始大小Bytes': 5149,
+  '顶层字段': [
+    'meta',
+    'share_key',
+    'file_id',
+    'file_name',
+    'links',
+    'mbp_links',
+    'beta_links',
+    'cache_hit'
+  ],
+  '链接总数': 9,
+  '有效链接数': 9,
+  'HLS链接数': 7,
+  'VIP锁定数': 0,
+  '质量分布': { ORG: 2, '1080P': 1, '720P': 2, '360P': 2, AUTO: 2 },
+  '分组分布': { MovieBox: 9 },
+  '媒体字段': [ 'title', 'year', 'imdb_id', 'altTitles' ]
+}
+
+=== 字段完整性 ===
+{
+  total: 9,
+  stats: {
+    url: { present: 9, missing: 0 },
+    quality: { present: 9, missing: 0 },
+    size: { present: 9, missing: 0 },
+    group: { present: 9, missing: 0 },
+    file_id: { present: 9, missing: 0 },
+    file_name: { present: 9, missing: 0 },
+    vip_locked: { present: 9, missing: 0 }
+  }
+}
+
+=== 内容摘要 ===
+[媒体信息] {
+  title: 'The Office',
+  year: '2005',
+  imdbId: 'tt0386676',
+  type: 'tv',
+  season: 1,
+  episode: 5
+}
+[streams] 共 9 条
+
+[播放链接]
+  1. 1080P | HLS | MovieBox | 大小: 351272960 | VIP: 可用
+     URL: https://hls.shegu.net/73555.m3u8?quality=1080p&sign=b249664c2703c2d617871db525f08874360e5dbeMs5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  2. 720P | HLS | MovieBox | 大小: 254803968 | VIP: 可用
+     URL: https://hls.shegu.net/73555.m3u8?quality=720p&sign=0f993a79f8708950d7db67cca1a9add5c454b3c6Ms5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  3. 720P | HLS | MovieBox | 大小: 258998272 | VIP: 可用
+     URL: https://hls.shegu.net/38258728.m3u8?quality=720p&sign=aaa541b8b318603063c67e0d8aede375932005f7Ms5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  4. 360P | HLS | MovieBox | 大小: 51380224 | VIP: 可用
+     URL: https://hls.shegu.net/73555.m3u8?quality=360p&sign=7f8462144062ee824e68282e61095e73aff03058Ms5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  5. 360P | HLS | MovieBox | 大小: 247.35 MB | VIP: 可用
+     URL: https://hls.shegu.net/38258728.m3u8?quality=360p&sign=252199c7d95e0e4b92bb8ba935ff78de9e0c4365Ms5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  6. AUTO | HLS | MovieBox | 大小: 2.01 GB | VIP: 可用
+     URL: https://hls.shegu.net/73555.m3u8?sign=62399ed29e3665ac63e2c9cce660ac6ccec03dabMs5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  7. AUTO | HLS | MovieBox | 大小: 247.35 MB | VIP: 可用
+     URL: https://hls.shegu.net/38258728.m3u8?sign=8e75f768efaffe3aff94c15f832483fa4af80b39Ms5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+  8. ORG | RAW | MovieBox | 大小: 2097152 | VIP: 可用
+     URL: https://usa7-nas34.shegu.net/vip/p1/org_tv/1/0/10/1/tv.10.S1E5.original.915163.20190714095501.mp4?KEY1=zCp0VM4soUhXJY6CGVIagg&KEY2=1791747389&KEY7=23&KEY8=m22000153&KEY0=2
+  9. ORG | RAW | MovieBox | 大小: 258998272 | VIP: 可用
+     URL: https://usa7-nas28.shegu.net/vip/p1/org_tv/1/0/10/1/tv.10.S1E5.original.3203079.20260509034409.mkv?KEY1=nEtDJ7wdIwnPT495tNbKfg&KEY2=1791747389&KEY7=23&KEY8=m22000153&KEY0=2
+
+[主播放地址] https://hls.shegu.net/73555.m3u8?quality=1080p&sign=b249664c2703c2d617871db525f08874360e5dbeMs5&t=1791747389&client=mbp&KEY2=1791754589&KEY7=23&KEY8=m22000153&IP=2a06:98c0:3600::103
+
+[probe] 完成

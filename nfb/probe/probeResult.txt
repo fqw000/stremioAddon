@@ -1,0 +1,105 @@
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ 🚀 NFB Probe v2.3  ·  Stremio Addon 数据体检                               │
+╰────────────────────────────────────────────────────────────────────────╯
+  release        nfb-probe@2.3
+  node           v24.15.0
+  proxy          直连
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ 🎬 1/5  search  ·  GET /api/search/v4/films/?q=children&per_page=3     │
+╰────────────────────────────────────────────────────────────────────────╯
+  ✅ [search] 200 · 1206ms · 2874B
+  url            https://searchapi.nfb.ca/api/search/v4/films/?q=children&per_page=3&page=1&sort_by=relevance&order_by=desc&safe_search=false&include=description
+  total/pages    951 / 317
+  · previews
+    🖼 children                   movie    Children               ⏱ 2min           👤 Alanis Obomsawin
+    🖼 night-children             movie    Night Children         ⏱ 30min          👤 Bernard Devlin
+    🖼 children-first             movie    Children First         ⏱ 17min          👤 —
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ 📚 2/5  catalog  ·  GET /api/v5/works?size=3&page=1&include_fields=…   │
+╰────────────────────────────────────────────────────────────────────────╯
+  ✅ [catalog] 200 · 2545ms · 4379B
+  url            https://publicapi.nfb.ca/api/v5/works?locale=en&size=3&page=1&include_series_e…
+  total/pages    8034 / 2678
+  fields.ok      directors=true availability=true
+  · previews
+    🖼 comic-strip-chronicles     series      Comic Strip Chronicles ⏱ —
+    🖼 alambic-en                 series      Alambic              ⏱ —
+    🖼 the-curve                  series      The Curve            ⏱ —
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ 📄 3/5  meta  ·  GET /film/bread-will-walk/  (HTML + JSON-LD)          │
+╰────────────────────────────────────────────────────────────────────────╯
+  ✅ [meta] 200 · 2067ms · 66611B
+  url            https://www.nfb.ca/film/bread-will-walk/
+  jsonld         ✅ @type=Movie/VideoObject
+  csrf           ✅ csrftoken captured
+  · Stremio MetaDetail
+  id             bread-will-walk
+  type           movie
+  name           Bread Will Walk
+  poster         ✅ https://assets.nfbcdn.ca/medias/norman/jackets/BWW_Keyart_1440x2160_EN…
+  posterShape    poster
+  background     ✅ https://assets.nfbcdn.ca/medias/norman/thumbs_xlarge/2026/BWW_Keyart_3…
+  runtime        11min
+  releaseInfo    2025
+  directors      Alex Boya
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ ▶️  4/5  stream  ·  GET /api/v4/films/bread-will-walk/stream  (需 csrf) │
+╰────────────────────────────────────────────────────────────────────────╯
+  ✅ [stream] 200 · 1012ms · 1435B
+  url            https://www.nfb.ca/api/v4/films/bread-will-walk/stream
+  hls            ✅
+  dv             ✅
+  expires        +11h 59min
+  · Stremio Stream[]
+    🔗 HLS / Auto           https://d3acx5b8mnvbua.cloudfront.net/hls/1026551_1026550_DM-16693/10265…
+    🔗 HLS / Dolby Vision   https://d3acx5b8mnvbua.cloudfront.net/hls/1026551_1026550_DM-16693_aen/1…
+
+╭────────────────────────────────────────────────────────────────────────╮
+│ 📊 5/5  getStats()  ·  各接口健康度                                          │
+╰────────────────────────────────────────────────────────────────────────╯
+
+  ✅ SEARCH  n=1 ok=1 fail=0
+  latency        avg=1206ms  p50=1206ms  p95=1206ms  max=1206ms
+  size           avg=2874B
+  · biz
+      streamable   ██████████ 100%
+      poster       ██████████ 100%
+      runtime      ██████████ 100%
+      director     ███████░░░  67%
+
+  ✅ CATALOG  n=1 ok=1 fail=0
+  latency        avg=2545ms  p50=2545ms  p95=2545ms  max=2545ms
+  size           avg=4379B
+  · biz
+      poster       ██████████ 100%
+      runtime      ░░░░░░░░░░   0%
+      director     ███░░░░░░░  33%
+      movie        ░░░░░░░░░░   0%
+      series       ██████████ 100%
+      coll         ░░░░░░░░░░   0%
+
+  ✅ META  n=1 ok=1 fail=0
+  latency        avg=2067ms  p50=2067ms  p95=2067ms  max=2067ms
+  size           avg=66611B
+  · biz
+      poster       ██████████ 100%
+      background   ██████████ 100%
+      runtime      ██████████ 100%
+      director     ██████████ 100%
+      year         ██████████ 100%
+
+  ✅ STREAM  n=1 ok=1 fail=0
+  latency        avg=1012ms  p50=1012ms  p95=1012ms  max=1012ms
+  size           avg=1435B
+  · biz
+      hls          ██████████ 100%
+      dv           ██████████ 100%
+      warnings     ░░░░░░░░░░   0%
+
+✨ done
+

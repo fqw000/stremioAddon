@@ -1,0 +1,20 @@
+{
+  "name": "catvod-stremio-addon",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "probe": "node scripts/probe.js",
+    "probe:share": "node scripts/probe-share.js",
+    "test:adapter": "node scripts/test-adapter.js",
+    "test:hls": "node scripts/test-hls.js",
+    "test:matcher": "node scripts/test-matcher.js",
+    "test:addon": "node scripts/test-addon.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

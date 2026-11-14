@@ -27,3 +27,6 @@ npm-debug.log*
 *.bak
 
 # 其他临时文件
+
+
+api.md

@@ -1,0 +1,36 @@
+{
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "addon": {
+    "name": "CatVod Multi-Source",
+    "id": "org.catvod.multisource",
+    "version": "0.1.0",
+    "description": "多源影视聚合（技术研究）",
+    "logo": "https://raw.githubusercontent.com/your/repo/main/logo.png"
+  },
+  "sources": [
+    {
+      "id": "bfzy", "label": "暴风", "enabled": true,
+      "baseUrl": "https://bfzyapi.com/api.php/provide/vod",
+      "referer": "https://bfzyapi.com/",
+      "timeoutMs": 8000, "retries": 1,
+      "lines": { "bfzym3u8": { "mode": "direct" } },
+      "adRuleGroup": "暴风"
+    },
+    {
+      "id": "ffzy", "label": "非凡", "enabled": true,
+      "baseUrl": "http://cj.ffzyapi.com/api.php/provide/vod",
+      "referer": "http://cj.ffzyapi.com/",
+      "timeoutMs": 8000, "retries": 1,
+      "lines": { "feifan": { "mode": "share" }, "ffm3u8": { "mode": "direct" } },
+      "adRuleGroup": "非凡"
+    },
+    {
+      "id": "lz", "label": "量子", "enabled": true,
+      "baseUrl": "https://cj.lziapi.com/api.php/provide/vod",
+      "referer": "https://cj.lziapi.com/",
+      "timeoutMs": 8000, "retries": 1,
+      "lines": { "liangzi": { "mode": "share" }, "lzm3u8": { "mode": "direct" } },
+      "adRuleGroup": "量子"
+    }
+  ]
+}

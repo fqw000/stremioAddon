@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "@tanstack/start-client-core": "^1.170.35",
+    "seroval": "^1.6.9",
+    "type": "module"
+  }
+}
