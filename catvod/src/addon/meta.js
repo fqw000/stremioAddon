@@ -1,9 +1,42 @@
 import { parseItemId } from "./catalog.js";
+import { cachedDetail } from "../sources/cached.js";
 import { parsePlayUrl, isMovie, parseEpisodeNumber } from "../sources/maccmsBase.js";
-import { maccmsDetail } from "../sources/maccmsBase.js";
+import { resolveByImdb } from "../metadata/tmdb.js";
 import { log } from "../logger.js";
 
-export async function handleMeta({ type, id }, { registry }) {
+export async function handleMeta({ type, id }, { registry, userConfig = {} }) {
+  // 1. 外部 IMDb ID → TMDB
+  if (/^tt\d+$/.test(id)) {
+    try {
+      const tmdbMeta = await resolveByImdb(id, type, { season: 1, userConfig });
+      if (!tmdbMeta) return { meta: null };
+
+      const meta = {
+        id,
+        type,
+        name: tmdbMeta.name,
+        poster: tmdbMeta.poster || undefined,
+        description: tmdbMeta.overview || undefined,
+        releaseInfo: tmdbMeta.year || undefined,
+        background: tmdbMeta.poster || undefined,
+      };
+
+      if (type === "series") {
+        meta.videos = [{ id: `${id}:1:1`, title: "第1集", season: 1, episode: 1 }];
+      }
+      log.info(`[meta] IMDB ${id} → TMDB 映射成功`);
+      return {
+        meta,
+        cacheMaxAge: 86400,
+        staleRevalidate: 3600,
+      };
+    } catch (e) {
+      log.error(`[meta] IMDB ${id} TMDB 映射失败: ${e.message}`);
+      return { meta: null };
+    }
+  }
+
+  // 2. 内部 ID
   const parsed = parseItemId(id);
   if (!parsed) return { meta: null };
 
@@ -11,7 +44,7 @@ export async function handleMeta({ type, id }, { registry }) {
   if (!entry) return { meta: null };
 
   try {
-    const item = await maccmsDetail(entry.cfg, parsed.vodId);
+    const item = await cachedDetail(entry, parsed.vodId);
     if (!item) return { meta: null };
 
     const lines = parsePlayUrl(item.vod_play_from, item.vod_play_url);
@@ -33,21 +66,20 @@ export async function handleMeta({ type, id }, { registry }) {
 
     if (metaType === "series") {
       const videos = [];
-      // 只用第一条线路的集列表（不同线路集数一致，避免重复）
       for (const ep of lines[0]?.episodes || []) {
         const n = parseEpisodeNumber(ep.title);
         if (!n) continue;
-        videos.push({
-          id: `${id}:1:${n}`,  // bfzy:series:27312:1:2
-          title: ep.title,
-          season: 1,
-          episode: n,
-        });
+        videos.push({ id: `${id}:1:${n}`, title: ep.title, season: 1, episode: n });
       }
       meta.videos = videos;
     }
 
-    return { meta };
+    return {
+      meta,
+      cacheMaxAge: 900,
+      staleRevalidate: 300,
+      staleError: 1800,
+    };
   } catch (e) {
     log.error(`[meta] ${id} failed: ${e.message}`);
     return { meta: null };

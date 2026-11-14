@@ -1,11 +1,11 @@
 import { resolveByImdb } from "../metadata/tmdb.js";
 import { rankCandidates, DEFAULT_THRESHOLDS } from "../metadata/matcher.js";
-import { loadRules } from "../hls/rules.js";
-import { pingCache, backendName } from "../cache/index.js";
+import { loadRules, invalidateSourceMap } from "../hls/rules.js";
+import { pingCache, backendName, currentPrefix } from "../cache/index.js";
 import { log } from "../logger.js";
 
 export function registerDebugRoutes(app, { registry }) {
-  // 匹配链路全透明：TMDB 元数据 + 各源 search + 每候选打分明细
+  // 匹配链路全透明
   app.get("/debug/match", async (req, res) => {
     const { imdbid, type = "series", season, episode } = req.query;
     if (!/^tt\d+$/.test(String(imdbid || ""))) {
@@ -107,24 +107,25 @@ export function registerDebugRoutes(app, { registry }) {
   });
 
   // 热重载广告规则
-  app.post("/debug/reload-rules", (req, res) => {
-    try {
-      const rules = loadRules();
-      log.info(`[debug] rules reloaded: ${rules.rules.length} groups, ${rules.ads.length} ads`);
-      res.json({ ok: true, groups: rules.rules.length, ads: rules.ads.length });
-    } catch (e) {
-      log.error(`[debug] reload-rules failed: ${e.message}`);
-      res.status(500).json({ ok: false, error: e.message });
-    }
-  });
+app.post("/debug/reload-rules", (req, res) => {
+  try {
+    const rules = loadRules();
+    invalidateSourceMap();  // ← 加这一行，让 source→group 映射也重载
+    log.info(`[debug] rules reloaded: ${rules.rules.length} groups, ${rules.ads.length} ads`);
+    res.json({ ok: true, groups: rules.rules.length, ads: rules.ads.length });
+  } catch (e) {
+    log.error(`[debug] reload-rules failed: ${e.message}`);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
-  // 缓存后端状态
+  // 缓存后端状态（含前缀）
   app.get("/debug/cache", async (req, res) => {
     try {
       const p = await pingCache();
-      res.json({ backend: backendName(), ...p });
+      res.json({ backend: backendName(), prefix: currentPrefix(), ...p });
     } catch (e) {
-      res.status(500).json({ backend: backendName(), ok: false, error: e.message });
+      res.status(500).json({ backend: backendName(), prefix: currentPrefix(), ok: false, error: e.message });
     }
   });
 }

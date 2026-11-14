@@ -1,24 +1,39 @@
-// share 页面 → 真实 m3u8 URL
-// 探针确认：ffzy / lz 的 share 页面均在 <script> 中有 m3u8 相对路径
-// 通用策略：优先匹配 url 变量，回退匹配 .m3u8 字符串
 import { fetchWithRetry } from "../utils/http.js";
+import { getJSON, setJSON, withInflight } from "../cache/index.js";
+import { KEY, TTL, NEG_TTL } from "../cache/ttl.js";
+import { log } from "../logger.js";
 
 const URL_VAR_RE = /(?:const\s+url|url)\s*=\s*["']([^"']+?\.m3u8[^"']*)["']/;
 const M3U8_RE = /["']([^"']+?\.m3u8[^"']*)["']/;
 const ABS_M3U8_RE = /(https?:\/\/[^\s"'<>]+?\.m3u8[^\s"'<>]*)/;
 
-/**
- * @param {string} shareUrl 形如 https://vip.ffzy-online2.com/share/xxx
- * @param {{ ua:string, referer:string, timeoutMs?:number }} opts
- * @returns {Promise<{ ok:boolean, m3u8?:string, error?:string }>}
- */
-export async function resolveShare(shareUrl, { ua, referer, timeoutMs = 10000 }) {
-  let origin;
-  try {
-    origin = new URL(shareUrl).origin;
-  } catch {
-    return { ok: false, error: "invalid share url" };
+export async function resolveShare(shareUrl, { ua, referer, timeoutMs = 10000, srcId } = {}) {
+  const cacheKey = srcId ? KEY.share(srcId, shareUrl) : null;
+
+  if (cacheKey) {
+    const hit = await getJSON(cacheKey);
+    if (hit) {
+      log.info(`[cache] hit share ${srcId} ${shareUrl.slice(-12)}`);
+      return hit;
+    }
   }
+
+  return withInflight(`share:${shareUrl}`, async () => {
+    const result = await resolveShareUncached(shareUrl, { ua, referer, timeoutMs });
+    if (cacheKey) {
+      // 成功 → TTL.STREAM_RESOLVE（3min）
+      // 失败 → NEG_TTL.STREAM_403（3min），防止反复打 share 页面
+      const ttl = result.ok ? TTL.STREAM_RESOLVE : NEG_TTL.STREAM_403;
+      await setJSON(cacheKey, result, ttl);
+    }
+    return result;
+  });
+}
+
+async function resolveShareUncached(shareUrl, { ua, referer, timeoutMs }) {
+  let origin;
+  try { origin = new URL(shareUrl).origin; }
+  catch { return { ok: false, error: "invalid share url" }; }
 
   let html;
   try {

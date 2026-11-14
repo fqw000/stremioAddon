@@ -1,6 +1,6 @@
 // Upstash Redis REST API 客户端（原生 fetch，不引 SDK）
 const URL_BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
-const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
+const TOKEN = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
 
 export function isEnabled() {
   return Boolean(URL_BASE && TOKEN);
@@ -42,5 +42,5 @@ export async function del(key) {
 
 export async function ping() {
   const j = await request("/ping");
-  return { ok: j.result === "PONG", backend: "upstash" };
+  return { ok: j.result === "PONG" };
 }

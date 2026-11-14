@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CatVod 配置</title>
+  <link rel="stylesheet" href="/configure.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 style="font-size: 24px; font-weight: 600;">CatVod</h1>
+      <p class="subtitle">多源影视聚合配置</p>
+    </header>
+
+    <main class="content">
+      <!-- 源开关 -->
+      <section class="group">
+        <h2 class="group-title">启用源</h2>
+        <p class="group-desc">选择要聚合的资源站（默认全开）</p>
+        <div class="card">
+          <div class="checkbox-group" id="sources">
+            <label class="checkbox-item"><input type="checkbox" value="bfzy" checked><span>暴风 (bfzy)</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="ffzy" checked><span>非凡 (ffzy)</span></label>
+            <label class="checkbox-item"><input type="checkbox" value="lz" checked><span>量子 (lz)</span></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 线路黑名单 -->
+      <section class="group">
+        <h2 class="group-title">线路黑名单</h2>
+        <p class="group-desc">包含以下关键字的播放线路将被过滤（每行一个）</p>
+        <div class="card">
+          <div class="setting" style="flex-direction: column; align-items: stretch;">
+            <textarea id="blacklist" class="input" rows="4" placeholder="例如：&#10;ffm3u8&#10;lzm3u8"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- TMDB API Key -->
+      <section class="group">
+        <h2 class="group-title">高级选项</h2>
+        <div class="card">
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">TMDB API Key</span>
+              <span class="setting-desc">可选，用于外部 IMDb 映射，留空使用服务端默认</span>
+            </div>
+            <input type="text" id="tmdbKey" class="input" placeholder="留空使用默认">
+          </div>
+        </div>
+      </section>
+
+      <!-- 配置摘要 -->
+      <section class="group">
+        <h2 class="group-title">配置摘要</h2>
+        <div class="card">
+          <div class="summary">
+            <div class="summary-line">
+              <span class="summary-key">安装地址</span>
+              <span class="summary-val" id="installUrl">生成中…</span>
+            </div>
+          </div>
+          <div class="summary-actions">
+            <button class="btn-copy" id="copyBtn">复制链接</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button id="installBtn" class="btn-install">安装到 Stremio</button>
+      <p class="footer-hint">Made with ❤️ for Stremio Community</p>
+    </footer>
+  </div>
+  <script src="/configure.js"></script>
+</body>
+</html>
