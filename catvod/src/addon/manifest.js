@@ -22,8 +22,8 @@ export function buildManifest(userConfig = {}) {
     id: "wangqifei.eu.org.catvod",
     version: "0.1.0",
     name: "CatVod Multi-Source",
-    description: "多源影视聚合（技术研究）",
-    logo: "https://raw.githubusercontent.com/your/repo/main/logo.png",
+    description: "多源影视聚合，引入maccms源为stremio提供丰富的电影和剧集资源,支持多种源的搜索和播放",
+    logo: "https://img.icons8.com/?size=200&id=23809&format=png",
     types: ["movie", "series"],
     resources: [
       "catalog",
