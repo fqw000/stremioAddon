@@ -1,42 +1,72 @@
 // src/hls/fetchManifest.js
 //
 // 拉取 m3u8 清单（带 UA/Referer/超时/重试）
-// 关键改动：失败时不吞错误，返回每次尝试的 request/response 细节
+//
+// 三层降级策略（按优先级）：
+//   1. 直连源站（原有逻辑，一字不动）
+//   2. 直连失败 → 走代理（MANIFEST_PROXY_URL）
+//   3. 代理也失败 → 返回 ok:false，/hls/clean 会 307 重定向到原始 URL
+//
+// 代理配置：
+//   MANIFEST_PROXY_URL=https://hls.wangqifei.eu.org
+//   代理接口：GET {PROXY}/m3u?url=<encoded>&referer=<...>&ua=<...>
+//   代理侧从 query 读取 referer/ua，再带给源站。
+//
+// 每次尝试的 request/response 细节都记录到 attempts，便于诊断。
 //
 import { log } from "../logger.js";
 
+const MANIFEST_PROXY = (process.env.MANIFEST_PROXY_URL || "").replace(/\/$/, "");
+const USE_PROXY = Boolean(MANIFEST_PROXY);
+
+/** 校验响应内容是否是合法 m3u8 */
+function isM3U8Text(text) {
+  return typeof text === "string" && text.trimStart().startsWith("#EXTM3U");
+}
+
+/** 构造代理 URL：UA/Referer 放 query，代理会带给源站 */
+function buildProxyUrl(targetUrl, { ua, referer }) {
+  const params = new URLSearchParams();
+  params.set("url", targetUrl);
+  if (referer) params.set("referer", referer);
+  if (ua) params.set("ua", ua);
+  return `${MANIFEST_PROXY}/m3u?${params.toString()}`;
+}
+
+/** 代理模式的请求头：UA/Referer 已在 query 里，这里只带 Accept */
+function buildProxyHeaders() {
+  return { Accept: "*/*" };
+}
+
+/** 直连模式的请求头：原有逻辑 */
+function buildDirectHeaders({ ua, referer }) {
+  const h = { Accept: "*/*" };
+  if (ua) h["User-Agent"] = ua;
+  if (referer) h["Referer"] = referer;
+  return h;
+}
+
 /**
- * @returns {Promise<{ ok: boolean, text: string|null, attempts: Array }>}
- * attempts[]: {
- *   attempt: number,
- *   elapsed: ms,
- *   request: { url, method, headers },
- *   response?: { status, ok, headers, bodyHead },
- *   error?: { name, message }
- * }
+ * 单阶段尝试（内部带重试）
+ * @returns {Promise<{ ok: boolean, text: string|null }>}
+ * 每次尝试 push 到外部 attempts 数组
  */
-export async function fetchManifestWithMeta(url, {
-  ua,
-  referer,
-  timeoutMs = 10000,
-  retries = 1,
-  srcId,
-} = {}) {
-  // 实际发出的请求头（用于诊断"UA/Referer 是否真的传了"）
-  const builtHeaders = { Accept: "*/*" };
-  if (ua) builtHeaders["User-Agent"] = ua;
-  if (referer) builtHeaders["Referer"] = referer;
-
-  const attempts = [];
-
+async function tryFetchStage({
+  targetUrl,
+  requestHeaders,
+  stage,           // "direct" | "proxy"
+  timeoutMs,
+  retries,
+  attempts,
+}) {
   for (let i = 0; i <= retries; i++) {
     const t0 = Date.now();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
     try {
-      const res = await fetch(url, {
-        headers: builtHeaders,
+      const res = await fetch(targetUrl, {
+        headers: requestHeaders,
         signal: ctrl.signal,
         redirect: "follow",
       });
@@ -45,54 +75,129 @@ export async function fetchManifestWithMeta(url, {
       const responseHeaders = {};
       for (const [k, v] of res.headers.entries()) responseHeaders[k] = v;
 
-      let text = null;
-      let bodyHead = "";
-
+      // ===== 2xx 但内容非 m3u8：视为失败 =====
       if (res.ok) {
-        text = await res.text();
-        bodyHead = text.slice(0, 500);
-      } else {
-        // 非 2xx：只读前 500 字节，用于展示源站返回的错误页（可能是伪 404 HTML）
-        try {
-          const clone = res.clone();
-          const raw = await clone.text();
-          bodyHead = raw.slice(0, 500);
-        } catch {}
+        const text = await res.text();
+        if (isM3U8Text(text)) {
+          attempts.push({
+            attempt: i + 1,
+            elapsed,
+            stage,
+            viaProxy: stage === "proxy",
+            request: { url: targetUrl, method: "GET", headers: requestHeaders },
+            response: {
+              status: res.status,
+              ok: true,
+              headers: responseHeaders,
+              bodyHead: text.slice(0, 500),
+            },
+          });
+          return { ok: true, text };
+        }
+        attempts.push({
+          attempt: i + 1,
+          elapsed,
+          stage,
+          viaProxy: stage === "proxy",
+          request: { url: targetUrl, method: "GET", headers: requestHeaders },
+          response: {
+            status: res.status,
+            ok: false,
+            headers: responseHeaders,
+            bodyHead: text.slice(0, 500),
+            note: "200-but-not-m3u8",
+          },
+        });
+        log.warn(`[hls][${stage}] attempt ${i + 1}: 200 但非 m3u8 ${targetUrl.slice(0, 120)}`);
+        continue;
       }
+
+      // 非 2xx
+      let bodyHead = "";
+      try {
+        const raw = await res.clone().text();
+        bodyHead = raw.slice(0, 500);
+      } catch {}
 
       attempts.push({
         attempt: i + 1,
         elapsed,
-        request: { url, method: "GET", headers: builtHeaders },
+        stage,
+        viaProxy: stage === "proxy",
+        request: { url: targetUrl, method: "GET", headers: requestHeaders },
         response: {
           status: res.status,
-          ok: res.ok,
+          ok: false,
           headers: responseHeaders,
           bodyHead,
         },
       });
-
-      if (res.ok) {
-        return { ok: true, text, attempts };
-      }
-
-      log.warn(`[hls] fetch attempt ${i + 1} failed: HTTP ${res.status} ${url}`);
+      log.warn(`[hls][${stage}] attempt ${i + 1} failed: HTTP ${res.status} ${targetUrl.slice(0, 120)}`);
     } catch (e) {
       const elapsed = Date.now() - t0;
       const errName = e.name === "AbortError" ? "timeout" : e.name;
       attempts.push({
         attempt: i + 1,
         elapsed,
-        request: { url, method: "GET", headers: builtHeaders },
+        stage,
+        viaProxy: stage === "proxy",
+        request: { url: targetUrl, method: "GET", headers: requestHeaders },
         error: { name: errName, message: e.message },
       });
-      log.warn(`[hls] fetch attempt ${i + 1} failed: ${errName}: ${e.message} ${url}`);
+      log.warn(`[hls][${stage}] attempt ${i + 1} failed: ${errName}: ${e.message} ${targetUrl.slice(0, 120)}`);
     } finally {
       clearTimeout(timer);
     }
   }
 
-  return { ok: false, text: null, attempts };
+  return { ok: false, text: null };
+}
+
+/**
+ * 拉清单主流程：直连优先 → 代理降级 → 返回 ok:false
+ * @returns {Promise<{ ok: boolean, text: string|null, attempts: Array, viaProxy: boolean }>}
+ */
+export async function fetchManifestWithMeta(url, {
+  ua,
+  referer,
+  timeoutMs = 10000,
+  retries = 1,
+  srcId,
+} = {}) {
+  const attempts = [];
+
+  // ===== 第 1 层：直连（原有逻辑，首选）=====
+  const directResult = await tryFetchStage({
+    targetUrl: url,
+    requestHeaders: buildDirectHeaders({ ua, referer }),
+    stage: "direct",
+    timeoutMs,
+    retries,
+    attempts,
+  });
+  if (directResult.ok) {
+    return { ok: true, text: directResult.text, attempts, viaProxy: false };
+  }
+
+  // ===== 第 2 层：直连失败 → 代理降级 =====
+  if (USE_PROXY) {
+    log.warn(`[hls] 直连失败，降级走代理 ${srcId || "?"} ${url.slice(0, 120)}`);
+    const proxyResult = await tryFetchStage({
+      targetUrl: buildProxyUrl(url, { ua, referer }),
+      requestHeaders: buildProxyHeaders(),
+      stage: "proxy",
+      timeoutMs,
+      retries,
+      attempts,
+    });
+    if (proxyResult.ok) {
+      return { ok: true, text: proxyResult.text, attempts, viaProxy: true };
+    }
+    log.warn(`[hls] 代理也失败 ${srcId || "?"} ${url.slice(0, 120)}`);
+  }
+
+  // ===== 第 3 层交给 /hls/clean：ok:false → 307 重定向 =====
+  return { ok: false, text: null, attempts, viaProxy: USE_PROXY };
 }
 
 /**
@@ -104,7 +209,9 @@ export async function fetchManifest(url, opts) {
     const last = r.attempts[r.attempts.length - 1];
     const reason = last?.error
       ? `${last.error.name}: ${last.error.message}`
-      : `HTTP ${last?.response?.status}`;
+      : last?.response?.note === "200-but-not-m3u8"
+        ? "200 但非 m3u8"
+        : `HTTP ${last?.response?.status}`;
     throw new Error(reason);
   }
   return r.text;
