@@ -1,3 +1,4 @@
+// src/addon/stream.js
 import { parseItemId } from "./catalog.js";
 import { resolveByImdb } from "../metadata/tmdb.js";
 import { rankCandidates, DEFAULT_THRESHOLDS } from "../metadata/matcher.js";
@@ -29,7 +30,6 @@ function buildCleanUrl(base, m3u8Url, srcId) {
   return `${base}/hls/clean?${p.toString()}`;
 }
 
-// 判断某条线路是否命中黑名单
 function isBlacklisted(lineName, title, blacklist) {
   if (!Array.isArray(blacklist) || blacklist.length === 0) return false;
   const probe = `${lineName} ${title || ""}`;
@@ -51,7 +51,6 @@ async function resolveOneSource(entry, vodId, opts, addonBaseUrl, blacklist) {
   let hadNonDirect = false;
 
   for (const line of lines) {
-    // 黑名单过滤：命中就跳过整条线路
     if (isBlacklisted(line.lineName, item.vod_name, blacklist)) {
       log.info(`[stream] 过滤黑名单线路 ${cfg.id}/${line.lineName}`);
       continue;
@@ -75,9 +74,14 @@ async function resolveOneSource(entry, vodId, opts, addonBaseUrl, blacklist) {
     const playable = !nonDirect && /\.m3u8(\?|$)/i.test(finalUrl);
     const url = playable ? buildCleanUrl(addonBaseUrl, finalUrl, srcId) : finalUrl;
 
+    // ===== 关键改动：标签文案 =====
+    const tag = playable
+      ? ""
+      : " [长按复制在浏览器播放]";
+
     streams.push({
       name: `${cfg.label}｜${line.lineName}`,
-      title: `${item.vod_name}${ep.title ? " " + ep.title : ""}${nonDirect ? " [non-direct]" : ""}`,
+      title: `${item.vod_name}${ep.title ? " " + ep.title : ""}${tag}`,
       url,
       behaviorHints: playable ? { notWebReady: false } : { notWebReady: true },
     });
