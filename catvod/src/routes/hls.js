@@ -73,6 +73,9 @@ export function registerHlsRoutes(app, { getSourcesConfig }) {
       cleanedSegments: (r.cleaned.match(/^#EXTINF/gm) || []).length,
       originalHead: r.original.slice(0, 800),
       cleanedHead: r.cleaned.slice(0, 800),
+      // ===== 关键：暴露源站原始请求/响应 =====
+      fetchAttempts: r.fetchAttempts || [],
     });
   });
+  
 }

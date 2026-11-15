@@ -1,5 +1,5 @@
 import { findSourceGroup, compileRule, getRules } from "./rules.js";
-import { fetchManifest } from "./fetchManifest.js";
+import { fetchManifestWithMeta } from "./fetchManifest.js";
 import { isMasterPlaylist, rewriteMaster } from "./master.js";
 import { log } from "../logger.js";
 
@@ -92,16 +92,41 @@ export async function cleanHls(url, sourceId, { addonBaseUrl, hlsConfig = {}, so
   const cfg = { ...DEFAULT_HLS_CONFIG, ...hlsConfig };
   const rules = getRules();
 
+  // ===== fetch 阶段：返回详细 attempts，不吞错误 =====
   let text;
+  let fetchAttempts = [];
   try {
-    text = await fetchManifest(url, {
+    const r = await fetchManifestWithMeta(url, {
       ua: sourceCfg.ua,
       referer: sourceCfg.referer,
       timeoutMs: sourceCfg.timeoutMs,
     });
+    fetchAttempts = r.attempts;
+
+    if (!r.ok) {
+      const last = r.attempts[r.attempts.length - 1];
+      const reasonText = last?.error
+        ? `${last.error.name}: ${last.error.message}`
+        : `HTTP ${last?.response?.status}`;
+      log.error(`[hls] fetch failed ${url}: ${reasonText}`);
+      return {
+        type: "error",
+        original: "", cleaned: "", hits: [], risk: "high",
+        degraded: true,
+        reason: `fetch-failed: ${reasonText}`,
+        fetchAttempts,
+      };
+    }
+    text = r.text;
   } catch (e) {
     log.error(`[hls] fetch failed ${url}: ${e.message}`);
-    return { type: "error", original: "", cleaned: "", hits: [], risk: "high", degraded: true, reason: `fetch-failed: ${e.message}` };
+    return {
+      type: "error",
+      original: "", cleaned: "", hits: [], risk: "high",
+      degraded: true,
+      reason: `fetch-failed: ${e.message}`,
+      fetchAttempts,
+    };
   }
 
   if (isMasterPlaylist(text)) {
