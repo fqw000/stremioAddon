@@ -1,6 +1,6 @@
 /**
  * master playlist 改写：
- *   - 子清单 (.m3u8) → 改写为 /hls/clean?url=<abs>&src=<src>
+ *   - 子清单 (.m3u8) → 改写为 /hls?url=<abs>&src=<src>
  *   - 子清单保留父 query（sign）
  *   - 非 m3u8 子资源只做绝对化
  */
@@ -35,7 +35,7 @@ export function rewriteMaster(text, baseUrl, sourceId, addonBaseUrl) {
 
     const params = new URLSearchParams({ url: abs.href });
     if (sourceId) params.set("src", sourceId);
-    out.push(`${addonBaseUrl}/hls/clean?${params.toString()}`);
+    out.push(`${addonBaseUrl}/hls?${params.toString()}`);
   }
   return out.join("\n");
 }

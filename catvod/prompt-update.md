@@ -30,7 +30,7 @@
 
 **硬性约束（不可违反）**：
 1. 不合并不同源结果，每个源独立 catalog / meta / stream。
-2. **不中转分片**：`/hls/clean` 只改 m3u8 清单，分片 URL 一律转绝对原始地址。
+2. **不中转分片**：`/hls` 只改 m3u8 清单，分片 URL 一律转绝对原始地址。
 3. ijk 参数不进返回流。
 4. 低置信不强行透传（score < 0.60 返回空，0.60–0.85 返回候选）。
 5. 不编造接口。如果源结构未知，先探测，不要猜测。
@@ -77,7 +77,7 @@ curl -s -o /dev/null -w "%{http_code}" -A "Mozilla/5.0 ..." -e "https://360zy.co
 curl -s -o /dev/null -w "%{http_code}" "<url>"
 ```
 
-**判定**：如果裸请求 403，说明 manifest 层有防盗链，`/hls/clean` 必须带 `sourceCfg.ua` / `sourceCfg.referer` 拉取。
+**判定**：如果裸请求 403，说明 manifest 层有防盗链，`/hls` 必须带 `sourceCfg.ua` / `sourceCfg.referer` 拉取。
 
 ### 1.4 输出探测结论（AI 在回复中列出）
 
@@ -296,7 +296,7 @@ curl -s "http://127.0.0.1:3000/catalog/series/zy360-series/search=庆余年.json
 curl -s "http://127.0.0.1:3000/stream/series/zy360:series:12345:1:1.json" | jq
 ```
 
-**期望**：`streams` 数组非空，且每条 `url` 指向 `/hls/clean?url=...&src=zy360`。
+**期望**：`streams` 数组非空，且每条 `url` 指向 `/hls?url=...&src=zy360`。
 
 ### 6.6 HLS 清洗预览
 
@@ -328,7 +328,7 @@ node scripts/regression-test.js http://127.0.0.1:3000
 | catalog 返回 0 条 | 搜索字段名不对 / keyword 编码问题 | 看 `[catalog] zy360 search=... → 0 items` 日志；确认 `maccmsSearch` 返回的 `list` 是否为空 |
 | stream 返回空 | detail 的 `vod_play_url` 为空 / `lines` 配置的线路名不匹配 | 看 detail 原始返回；确认 `cfg.lines` 的 key 与 `vod_play_from` 完全一致 |
 | 所有线路 `nonDirect: true` | share 页面结构变化 / 线路标错 mode | 用 `curl <share URL>` 看 HTML；检查 `shareResolver.js` 的三个正则是否匹配 |
-| `/hls/clean` 返回 `#EXTM3U` 但播放器黑屏 | 分片有防盗链 / sign 过期 | 用 VLC 直接打开返回的 `.ts` 地址；如果 403，说明分片层防盗链，无法在不中转的前提下解决，需文档注明 |
+| `/hls` 返回 `#EXTM3U` 但播放器黑屏 | 分片有防盗链 / sign 过期 | 用 VLC 直接打开返回的 `.ts` 地址；如果 403，说明分片层防盗链，无法在不中转的前提下解决，需文档注明 |
 | HLS 清洗后视频变短 | 正则过激 | `/debug/hls-clean` 看 `hits` 里哪条规则 `removed` 过多；缩小正则范围 |
 
 **排查时提供的信息**：
@@ -348,7 +348,7 @@ node scripts/regression-test.js http://127.0.0.1:3000
 - [ ] `node --check` 语法通过
 - [ ] `/debug/sources` 中新源 `ok: true`
 - [ ] catalog 搜索返回 > 0
-- [ ] stream 返回非空，且 `url` 指向 `/hls/clean?src=zy360`
+- [ ] stream 返回非空，且 `url` 指向 `/hls?src=zy360`
 - [ ] `/debug/hls-clean` 无高风险降级（或降级原因合理）
 - [ ] `node scripts/health.js` 全部通过
 

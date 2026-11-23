@@ -1,3 +1,8 @@
+更新日志：
+11/19 修改 请求路径 hls/clean 为/hls  待验证
+`http://localhost:3000/hls/clean?url=`调整为：`http://localhost:3000/hls?url=`
+
+
 # CatVod Multi-Source Stremio Addon
 
 多源影视聚合 Stremio Addon（技术研究用途）。将国内多家 MacCMS 影视资源站封装为统一接口，支持独立源 catalog、外部 IMDb id 自动匹配拉流、HLS 广告清洗，分片始终直连源站不中转。
@@ -39,7 +44,7 @@
 
 - **多源聚合**：当前支持暴风（bfzy）、非凡（ffzy）、量子（lz）
 - **HLS 广告清洗**：按源分组正则剔除广告片段，只改清单不中转分片
-- **master playlist 递归**：master 子清单入口指向本服务 `/hls/clean`，保留 `sign` 等 query
+- **master playlist 递归**：master 子清单入口指向本服务 `/hls`，保留 `sign` 等 query
 - **风险检测降级**：片段减少 > 30% 判定高风险，原样返回原始清单
 - **三层拉取降级**：直连 → 代理 → 307 重定向到原始 URL
 - **双层缓存**：L1 内存 + L2 Upstash Redis，Redis 抖动自动冷却降级
@@ -76,7 +81,7 @@
 
 ```
 播放器
-  → GET /hls/clean?url=<源站m3u8>&src=bfzy
+  → GET /hls?url=<源站m3u8>&src=bfzy
       ├─ 1. 直连源站拉清单（首选）
       ├─ 2. 直连失败 → 走代理拉清单（MANIFEST_PROXY_URL）
       ├─ 3. 代理也失败 → 307 重定向到原始 URL
@@ -207,7 +212,7 @@ node scripts/regression-test.js http://127.0.0.1:3000 -v
 | `TMDB_BASE_URL` | 否 | `https://api.themoviedb.org` | TMDB 反代地址（本地网络差时配） |
 | `UPSTASH_REDIS_REST_URL` | 否 | — | Upstash REST URL，不配则降级内存 |
 | `UPSTASH_REDIS_REST_TOKEN` | 否 | — | Upstash REST Token |
-| `ADDON_BASE_URL` | **Vercel 必填** | — | 如 `https://your-app.vercel.app`，拼接 `/hls/clean` 入口 |
+| `ADDON_BASE_URL` | **Vercel 必填** | — | 如 `https://your-app.vercel.app`，拼接 `/hls` 入口 |
 | `MANIFEST_PROXY_URL` | 推荐 | — | 清单代理地址，如 `https://hls.wangqifei.eu.org`，解决出站 IP 被屏蔽 |
 | `LOG_LEVEL` | 否 | `info` | `debug` / `info` / `warn` / `error` |
 | `LOG_JSON` | 否 | `false` | `true` 时输出结构化 JSON（生产推荐） |
@@ -243,7 +248,7 @@ node scripts/regression-test.js http://127.0.0.1:3000 -v
 
 | 路径 | 说明 |
 |---|---|
-| `GET /hls/clean?url=<encoded>&src=<id>` | HLS 清洗入口（播放器直接请求） |
+| `GET /hls?url=<encoded>&src=<id>` | HLS 清洗入口（播放器直接请求） |
 | `GET /health` | 健康检查 |
 | `GET /configure` | 配置页（HTML） |
 
@@ -288,7 +293,7 @@ curl -X POST "http://127.0.0.1:3000/debug/reload-rules"
 
 ```
 拉取清单 → 判断 master/media
-  ├─ master：改写子清单为 /hls/clean 入口（保留 sign）
+  ├─ master：改写子清单为 /hls 入口（保留 sign）
   └─ media：
       ├─ 按源正则剔除广告片段
       ├─ 全局广告域名黑名单剔除
@@ -330,7 +335,7 @@ export const DEFAULT_HLS_CONFIG = {
       ↓ 失败（404/timeout/非 m3u8）
 2. 代理（MANIFEST_PROXY_URL 配置时）
       ↓ 失败
-3. 307 重定向到原始 URL（由 /hls/clean 路由层执行）
+3. 307 重定向到原始 URL（由 /hls 路由层执行）
 ```
 
 **原因**：部分源站屏蔽数据中心 IP 段（Vercel、Cloudflare Worker 等），需通过代理绕过。但并非所有源都被屏蔽（如 ffzy/lz 直连可用），因此**直连优先，避免代理成为不必要的中转**。
@@ -484,7 +489,7 @@ node scripts/health.js -v
 3. `candidates` 里各源 `ranked` 都低分 → 源里没这部片
 4. 某源 `error` → 该源失效
 
-### Q3：`/hls/clean` 返回 307
+### Q3：`/hls` 返回 307
 
 **含义**：直连和代理都拉不到清单，降级到让播放器直连原始 URL。
 

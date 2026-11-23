@@ -14,7 +14,7 @@
 // 关键能力
 // ============================================================
 //
-//   - 307 降级识别：/hls/clean 用 manual 模式，拿到 307/308 视为"服务端 fetch 失败，
+//   - 307 降级识别：(原/hls/clean，请求路径已修改为hls) /hls 用 manual 模式，拿到 307/308 视为"服务端 fetch 失败，
 //     已降级让播放器直连源站"，不算失败
 //   - fetchAttempts 展示：HLS 失败时展示服务端对源站的原始请求头/响应头/body-head，
 //     用于判断是 IP 被屏蔽还是请求头缺失
@@ -111,8 +111,8 @@ function shortUrl(url, max = 180) {
   try {
     const u = new URL(url);
     const inner = u.searchParams.get("url");
-    if (u.pathname.includes("/hls/clean") && inner) {
-      const s = `${u.origin}/hls/clean?url=${decodeURIComponent(inner)}&src=${u.searchParams.get("src") || ""}`;
+    if (u.pathname.includes("/hls") && inner) {
+      const s = `${u.origin}/hls?url=${decodeURIComponent(inner)}&src=${u.searchParams.get("src") || ""}`;
       return s.length > max ? s.slice(0, max) + "..." : s;
     }
   } catch {}
@@ -121,7 +121,7 @@ function shortUrl(url, max = 180) {
 
 function classifyStream(url) {
   if (!url) return "UNKNOWN";
-  if (url.includes("/hls/clean")) return "HLS-CLEAN";
+  if (url.includes("/hls")) return "HLS-CLEAN";
   if (/\/share\//.test(url)) return "SHARE";
   if (/\.m3u8(\?|$)/i.test(url)) return "DIRECT";
   return "OTHER";
@@ -359,7 +359,7 @@ async function verifyStreamPlayable(stream, srcId) {
   console.log(`  ${C.cyan}▶${C.reset} 验证流 ${tagColor(tag)}[${tag}]${C.reset} ${C.blue}${label}${C.reset}`);
 
   if (tag !== "HLS-CLEAN") {
-    console.log(`     ${C.yellow}⚠️  跳过（非 /hls/clean 入口）${C.reset}`);
+    console.log(`     ${C.yellow}⚠️  跳过（非 /hls 入口）${C.reset}`);
     return;
   }
 
@@ -379,14 +379,14 @@ async function verifyStreamPlayable(stream, srcId) {
   const first = await request(stream.url, { redirect: "manual" });
 
   if (first.status === 307 || first.status === 308) {
-    ok(`[${label}] /hls/clean 降级重定向到原始 URL`, !!first.location, first.xhlsError || "");
+    ok(`[${label}] /hls 降级重定向到原始 URL`, !!first.location, first.xhlsError || "");
     if (first.location) console.log(`   ${C.gray}  降级目标: ${shortUrl(first.location, 200)}${C.reset}`);
     console.log(`   ${C.yellow}  ℹ️  未过滤广告，播放器直连源站${C.reset}`);
     await printHlsDebug(inner, src);
     return;
   }
 
-  if (!ok(`[${label}] /hls/clean 可达`, first.ok, first.error || `HTTP ${first.status}`)) {
+  if (!ok(`[${label}] /hls 可达`, first.ok, first.error || `HTTP ${first.status}`)) {
     if (VERBOSE) printDetail(first);
     await printHlsDebug(inner, src);
     return;
@@ -401,7 +401,7 @@ async function verifyStreamPlayable(stream, srcId) {
   while (playlist.isMaster && playlist.children.length > 0 && depth < 2) {
     depth++;
     const childUrl = playlist.children[0];
-    ok(`[${label}] master 子清单入口是 /hls/clean`, childUrl.includes("/hls/clean"), childUrl.slice(0, 120));
+    ok(`[${label}] master 子清单入口是 /hls`, childUrl.includes("/hls"), childUrl.slice(0, 120));
 
     const child = await request(childUrl, { redirect: "manual" });
     if (child.status === 307 || child.status === 308) {
@@ -496,7 +496,7 @@ async function main() {
   const collected = [];
   const r4a = await test("Stream", "series bfzy", "/stream/series/bfzy:series:27312:1:2.json", (d) => {
     if (!Array.isArray(d.streams) || d.streams.length === 0) return "无流";
-    if (!d.streams[0].url?.includes("/hls/clean")) return "未指向 /hls/clean";
+    if (!d.streams[0].url?.includes("/hls")) return "未指向 /hls";
     if (!d.streams[0].url?.includes("src=bfzy")) return "缺 src=bfzy";
     return true;
   }, { detail: VERBOSE });
@@ -507,7 +507,7 @@ async function main() {
     return true;
   }, { detail: VERBOSE });
   if (r4b.res.json?.streams?.length) {
-    const hls = r4b.res.json.streams.find((s) => s.url?.includes("/hls/clean")) || r4b.res.json.streams[0];
+    const hls = r4b.res.json.streams.find((s) => s.url?.includes("/hls")) || r4b.res.json.streams[0];
     collected.push({ srcId: "lz", stream: hls });
   }
 
@@ -522,7 +522,7 @@ async function main() {
     debugAfter: async () => { await printMatchDebug("tt0111161", "movie"); },
   });
   if (r5.res.json?.streams?.length) {
-    const s = r5.res.json.streams.find((x) => x.url?.includes("/hls/clean"));
+    const s = r5.res.json.streams.find((x) => x.url?.includes("/hls"));
     if (s) { const m = s.url.match(/[?&]src=([^&]+)/); collected.push({ srcId: m ? m[1] : "unknown", stream: s }); }
   }
 
@@ -540,7 +540,7 @@ async function main() {
     const stats = { "HLS-CLEAN": 0, SHARE: 0, DIRECT: 0, OTHER: 0 };
     r55.res.json.streams.forEach((s) => { stats[classifyStream(s.url)]++; });
     console.log(`   ${C.gray}分类: HLS-CLEAN=${stats["HLS-CLEAN"]} SHARE=${stats.SHARE} DIRECT=${stats.DIRECT}${C.reset}`);
-    r55.res.json.streams.filter((s) => s.url?.includes("/hls/clean")).forEach((s) => {
+    r55.res.json.streams.filter((s) => s.url?.includes("/hls")).forEach((s) => {
       const m = s.url.match(/[?&]src=([^&]+)/);
       collected.push({ srcId: m ? m[1] : "unknown", stream: s });
     });
@@ -549,7 +549,7 @@ async function main() {
   // [6] HLS 快检（识别 307）
   console.log(`\n${C.cyan}[6]${C.reset} HLS 清洗单条快检`);
   const testM3u8 = "https://p.bvvvvvvvvv1f.com/video/qingyuniandiyiji/%E7%AC%AC02%E9%9B%86/index.m3u8";
-  const r6 = await request(`/hls/clean?url=${encodeURIComponent(testM3u8)}&src=bfzy`, { redirect: "manual" });
+  const r6 = await request(`/hls?url=${encodeURIComponent(testM3u8)}&src=bfzy`, { redirect: "manual" });
   if (r6.status === 307 || r6.status === 308) {
     pass++;
     console.log(`  ${C.green}✅${C.reset} HLS | bfzy 清洗 ${C.yellow}(降级 307 → 直连原始 URL)${C.reset}`);

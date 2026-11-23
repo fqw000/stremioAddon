@@ -310,7 +310,7 @@ async function run() {
 
   const r4a = await test("Stream", "series bfzy", "/stream/series/bfzy:series:27312:1:2.json", (d) => {
     if (!Array.isArray(d.streams) || d.streams.length === 0) return "无流";
-    if (!d.streams[0].url?.includes("/hls/clean")) return "未指向 /hls/clean";
+    if (!d.streams[0].url?.includes("/hls")) return "未指向 /hls";
     return true;
   }, { detail: VERBOSE });
   if (r4a.res.json?.streams?.[0]) collected.push({ srcId: "bfzy", stream: r4a.res.json.streams[0] });
@@ -320,7 +320,7 @@ async function run() {
     return true;
   }, { detail: VERBOSE });
   if (r4b.res.json?.streams?.length) {
-    const hls = r4b.res.json.streams.find((s) => s.url?.includes("/hls/clean")) || r4b.res.json.streams[0];
+    const hls = r4b.res.json.streams.find((s) => s.url?.includes("/hls")) || r4b.res.json.streams[0];
     collected.push({ srcId: "lz", stream: hls });
   }
 
@@ -334,7 +334,7 @@ async function run() {
     return true;
   }, { detail: VERBOSE });
   if (r5.res.json?.streams?.length) {
-    const s = r5.res.json.streams.find((x) => x.url?.includes("/hls/clean"));
+    const s = r5.res.json.streams.find((x) => x.url?.includes("/hls"));
     if (s) {
       const m = s.url.match(/[?&]src=([^&]+)/);
       collected.push({ srcId: m ? m[1] : "unknown", stream: s });
@@ -353,12 +353,12 @@ async function run() {
   if (r55.res.json?.streams?.length) {
     const stats = { "HLS-CLEAN": 0, SHARE: 0, DIRECT: 0 };
     r55.res.json.streams.forEach((s) => {
-      if (s.url?.includes("/hls/clean")) stats["HLS-CLEAN"]++;
+      if (s.url?.includes("/hls")) stats["HLS-CLEAN"]++;
       else if (/\/share\//.test(s.url || "")) stats.SHARE++;
       else if (/\.m3u8(\?|$)/i.test(s.url || "")) stats.DIRECT++;
     });
     console.log(`   ${C.gray}分类: HLS-CLEAN=${stats["HLS-CLEAN"]} SHARE=${stats.SHARE} DIRECT=${stats.DIRECT}${C.reset}`);
-    r55.res.json.streams.filter((s) => s.url?.includes("/hls/clean")).forEach((s) => {
+    r55.res.json.streams.filter((s) => s.url?.includes("/hls")).forEach((s) => {
       const m = s.url.match(/[?&]src=([^&]+)/);
       collected.push({ srcId: m ? m[1] : "unknown", stream: s });
     });
@@ -400,7 +400,7 @@ async function run() {
       if (toVerify.length >= 3) break;
     }
     for (const item of toVerify) {
-      const tag = item.stream.url.includes("/hls/clean") ? "HLS-CLEAN" : "OTHER";
+      const tag = item.stream.url.includes("/hls") ? "HLS-CLEAN" : "OTHER";
       const label = item.stream.name || "?";
       console.log(`  ${C.cyan}▶${C.reset} 验证流 ${C.green}[${tag}]${C.reset} ${C.blue}${label}${C.reset}`);
 
@@ -416,7 +416,7 @@ async function run() {
       if (first.status === 307 || first.status === 308) {
         results.pass++;
         results.total++;
-        console.log(`  ${C.green}✅${C.reset} [${label}] /hls/clean 降级重定向`);
+        console.log(`  ${C.green}✅${C.reset} [${label}] /hls 降级重定向`);
         console.log(`   ${C.yellow}ℹ️  未过滤广告，播放器将直连源站${C.reset}`);
         if (first.location) console.log(`   ${C.gray}目标: ${first.location.slice(0, 200)}${C.reset}`);
         if (first.xhlsError) console.log(`   ${C.red}原因: ${first.xhlsError}${C.reset}`);
@@ -436,19 +436,19 @@ async function run() {
       if (!cleanOk) {
         results.fail++;
         results.details.push({ category: "E2E", name: label, errorMsg: `清洗返回异常 (HTTP ${first.status})` });
-        console.log(`  ${C.red}❌${C.reset} [${label}] /hls/clean 异常`);
+        console.log(`  ${C.red}❌${C.reset} [${label}] /hls 异常`);
         printDetail(first, `HTTP ${first.status}`);
         continue;
       }
 
       if (isMaster) {
-        const childIsCleanEntry = (firstUri || "").includes("/hls/clean");
+        const childIsCleanEntry = (firstUri || "").includes("/hls");
         if (childIsCleanEntry) {
           results.pass++;
           console.log(`  ${C.green}✅${C.reset} [${label}] master 子清单入口正确 (${firstUri.slice(0, 80)}...)`);
         } else {
           results.fail++;
-          results.details.push({ category: "E2E", name: label, errorMsg: "master 子清单入口不是 /hls/clean" });
+          results.details.push({ category: "E2E", name: label, errorMsg: "master 子清单入口不是 /hls" });
           console.log(`  ${C.red}❌${C.reset} [${label}] master 子清单入口错: ${firstUri}`);
         }
       } else {

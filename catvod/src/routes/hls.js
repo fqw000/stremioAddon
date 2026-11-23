@@ -12,7 +12,9 @@ function pickSourceCfg(sources, sourceId) {
 }
 
 export function registerHlsRoutes(app, { getSourcesConfig }) {
-  app.get("/hls/clean", async (req, res) => {
+  // app.get("/hls/clean", async (req, res) => {
+    // ===== 关键改动：将请求路径 /hls/clean 改为 /hls =====
+    app.get("/hls", async (req, res) => {
     const { url, src } = req.query;
     if (!url) return res.status(400).send("#EXTM3U\n# error: url required");
 
@@ -41,7 +43,7 @@ export function registerHlsRoutes(app, { getSourcesConfig }) {
       }
       res.send(r.cleaned || "#EXTM3U\n");
     } catch (e) {
-      log.error(`[hls] /hls/clean uncaught: ${e.message}`);
+      log.error(`[hls] /hls uncaught: ${e.message}`);
       // 兜底：未捕获异常也 307，让播放器直连
       res.set("X-HLS-Degraded", "1");
       res.redirect(307, String(url));

@@ -5,7 +5,7 @@
 // 三层降级策略（按优先级）：
 //   1. 直连源站（原有逻辑，一字不动）
 //   2. 直连失败 → 走代理（MANIFEST_PROXY_URL）
-//   3. 代理也失败 → 返回 ok:false，/hls/clean 会 307 重定向到原始 URL
+//   3. 代理也失败 → 返回 ok:false，/hls 会 307 重定向到原始 URL
 //
 // 代理配置：
 //   MANIFEST_PROXY_URL=https://hls.wangqifei.eu.org
@@ -108,7 +108,7 @@ async function tryFetchStage({
             note: "200-but-not-m3u8",
           },
         });
-        log.warn(`[hls][${stage}] attempt ${i + 1}: 200 但非 m3u8 ${targetUrl.slice(0, 120)}`);
+        log.warn(`[hls][${stage}] attempt ${i + 1}: 200 但非 m3u8 ${targetUrl}`);
         continue;
       }
 
@@ -132,7 +132,7 @@ async function tryFetchStage({
           bodyHead,
         },
       });
-      log.warn(`[hls][${stage}] attempt ${i + 1} failed: HTTP ${res.status} ${targetUrl.slice(0, 120)}`);
+      log.warn(`[hls][${stage}] attempt ${i + 1} failed: HTTP ${res.status} ${targetUrl}`);
     } catch (e) {
       const elapsed = Date.now() - t0;
       const errName = e.name === "AbortError" ? "timeout" : e.name;
@@ -144,7 +144,7 @@ async function tryFetchStage({
         request: { url: targetUrl, method: "GET", headers: requestHeaders },
         error: { name: errName, message: e.message },
       });
-      log.warn(`[hls][${stage}] attempt ${i + 1} failed: ${errName}: ${e.message} ${targetUrl.slice(0, 120)}`);
+      log.warn(`[hls][${stage}] attempt ${i + 1} failed: ${errName}: ${e.message} ${targetUrl}`);
     } finally {
       clearTimeout(timer);
     }
@@ -181,7 +181,7 @@ export async function fetchManifestWithMeta(url, {
 
   // ===== 第 2 层：直连失败 → 代理降级 =====
   if (USE_PROXY) {
-    log.warn(`[hls] 直连失败，降级走代理 ${srcId || "?"} ${url.slice(0, 120)}`);
+    log.warn(`[hls] 直连失败，降级走代理 ${srcId || "?"} ${url}`);
     const proxyResult = await tryFetchStage({
       targetUrl: buildProxyUrl(url, { ua, referer }),
       requestHeaders: buildProxyHeaders(),
@@ -193,10 +193,10 @@ export async function fetchManifestWithMeta(url, {
     if (proxyResult.ok) {
       return { ok: true, text: proxyResult.text, attempts, viaProxy: true };
     }
-    log.warn(`[hls] 代理也失败 ${srcId || "?"} ${url.slice(0, 120)}`);
+    log.warn(`[hls] 代理也失败 ${srcId || "?"} ${url}`);
   }
 
-  // ===== 第 3 层交给 /hls/clean：ok:false → 307 重定向 =====
+  // ===== 第 3 层交给 /hls：ok:false → 307 重定向 =====
   return { ok: false, text: null, attempts, viaProxy: USE_PROXY };
 }
 

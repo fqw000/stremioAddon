@@ -53,7 +53,7 @@
 | 约束 | 说明 |
 |---|---|
 | 不合并不同源 meta | 每个源独立 catalog / meta，stream 多源结果逐条返回 |
-| 不中转分片 | `/hls/clean` 只改写 m3u8 清单，分片 URL 一律转为**绝对原始地址**，播放器直连源站 |
+| 不中转分片 | `/hls` 只改写 m3u8 清单，分片 URL 一律转为**绝对原始地址**，播放器直连源站 |
 | ijk 不进返回流 | `config/adRules.json` 的 `ijk` 段仅文档参考，任何运行路径不得读取 |
 | 低置信不强行透传 | score < 0.60 返回空，0.60–0.85 返回候选列表（给用户选择） |
 | 不编造接口 | 所有源必须有明确的 API 依据；未验证的源为占位适配器 |
@@ -143,7 +143,7 @@ catvod/
 │   ├── config/
 │   │   └── loadConfig.js           # sources.json 加载 + 用户覆盖
 │   ├── routes/
-│   │   ├── hls.js                  # /hls/clean + /debug/hls-clean
+│   │   ├── hls.js                  # /hls + /debug/hls-clean
 │   │   └── debug.js                # /debug/match /sources /cache /reload-rules
 │   └── utils/
 │       ├── http.js                 # fetchWithRetry
@@ -175,7 +175,7 @@ catvod/
 | `TMDB_BASE_URL` | 否 | `https://api.themoviedb.org` | TMDB 反代地址（本地网络差时配） |
 | `UPSTASH_REDIS_REST_URL` | 否 | — | Upstash REST URL，不配则降级内存 |
 | `UPSTASH_REDIS_REST_TOKEN` | 否 | — | Upstash REST Token |
-| `ADDON_BASE_URL` | **Vercel 必填** | — | 如 `https://xxx.vercel.app`，拼接 `/hls/clean` 入口 |
+| `ADDON_BASE_URL` | **Vercel 必填** | — | 如 `https://xxx.vercel.app`，拼接 `/hls` 入口 |
 | `LOG_LEVEL` | 否 | `info` | `debug` / `info` / `warn` / `error` |
 | `LOG_JSON` | 否 | `false` | `true` 时输出结构化 JSON（生产推荐） |
 | `AD_RULES_PATH` | 否 | `config/adRules.json` | 广告规则文件路径 |
@@ -222,7 +222,7 @@ catvod/
 
 | 模式 | 说明 |
 |---|---|
-| `direct` | URL 是直链 m3u8（直接进 `/hls/clean`） |
+| `direct` | URL 是直链 m3u8（直接进 `/hls`） |
 | `share` | URL 是 `/share/xxx` 页面，需要 `shareResolver` 二次解析 |
 
 ### 4.3 `config/adRules.json` 结构
@@ -287,23 +287,23 @@ Stremio UI（Cinemeta 的影片页）
                       │     └─ share 线路 → resolveShare → 真实 m3u8
                       └─ 5. 返回 streams
                            [{ name: "暴风｜bfzym3u8",
-                              url: "https://your-app/hls/clean?url=...&src=bfzy" }]
+                              url: "https://your-app/hls?url=...&src=bfzy" }]
 ```
 
 **关键点**：
 - 低置信候选**记录到日志但不返回**（避免误导用户）
 - 中置信（0.60–0.85）记录到 `lowCandidates`，实际返回空（保留给后续 UI 扩展）
-- 所有可播放流都指向 `/hls/clean` 入口
+- 所有可播放流都指向 `/hls` 入口
 
 ### 5.3 播放时的 HLS 清洗
 
 ```
 播放器
-  └─ GET /hls/clean?url=<m3u8>&src=bfzy
+  └─ GET /hls?url=<m3u8>&src=bfzy
        └─ cleanHls
             ├─ fetchManifest（带 UA/Referer）
             ├─ 判断 master / media
-            │    ├─ master → rewriteMaster（子清单指向 /hls/clean，保留 sign）
+            │    ├─ master → rewriteMaster（子清单指向 /hls，保留 sign）
             │    └─ media → 按源正则剔除广告片段
             ├─ 风险检测（片段减少 >30% → 降级返回原清单）
             └─ 分片 URL 绝对化（不中转，播放器直连源站）
@@ -403,7 +403,7 @@ Stremio UI（Cinemeta 的影片页）
     {
       "name": "暴风｜bfzym3u8",
       "title": "庆余年第一季 第02集",
-      "url": "https://your-app/hls/clean?url=<encoded>&src=bfzy",
+      "url": "https://your-app/hls?url=<encoded>&src=bfzy",
       "behaviorHints": { "notWebReady": false }
     }
   ]
@@ -611,7 +611,7 @@ cleanHls(url, srcId, { addonBaseUrl, sourceCfg })
   ├─ 1. fetchManifest（带 UA/Referer/超时/重试）
   ├─ 2. 判断 master / media
   │     ├─ master → rewriteMaster
-  │     │     ├─ 子清单 URL 改为 /hls/clean?url=<abs>&src=<srcId>
+  │     │     ├─ 子清单 URL 改为 /hls?url=<abs>&src=<srcId>
   │     │     ├─ 保留父 sign（URL query 继承）
   │     │     └─ 非 m3u8 子资源只绝对化
   │     └─ media → 三段清洗
@@ -1267,12 +1267,12 @@ PORT=7001 node --env-file=.env.local src/localServer.js
 
 | 优化点 | 收益 | 难度 | 建议 |
 |---|---|---|---|
-| `/hls/clean` 短缓存 30s | 播放秒开 | 低 | **推荐** |
+| `/hls` 短缓存 30s | 播放秒开 | 低 | **推荐** |
 | TMDB `/find` 与 `alternative_titles` 并行 | 省 300-500ms | 低 | 可选 |
 | `catalog` 分页缓存 | 分页请求零开销 | 中 | 待 `extra.skip` 需求明确后做 |
 | Adapter 工厂化 | 新增源 5 行代码 | 中 | 源数 > 5 时做 |
 
-### 17.3 `/hls/clean` 缓存优化示例
+### 17.3 `/hls` 缓存优化示例
 
 **位置**：`src/routes/hls.js`，把：
 ```javascript

@@ -20,8 +20,11 @@ const C = {
 function getTimeString() {
   const d = new Date();
   const pad = (n, l = 2) => String(n).padStart(l, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
+
+
+
 
 function fmt(level, args) {
   const time = getTimeString();

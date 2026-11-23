@@ -27,7 +27,7 @@ function addonBase(req) {
 function buildCleanUrl(base, m3u8Url, srcId) {
   const p = new URLSearchParams({ url: m3u8Url });
   if (srcId) p.set("src", srcId);
-  return `${base}/hls/clean?${p.toString()}`;
+  return `${base}/hls?${p.toString()}`;
 }
 
 function isBlacklisted(lineName, title, blacklist) {
