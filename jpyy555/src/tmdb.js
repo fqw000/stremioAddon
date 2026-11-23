@@ -30,7 +30,7 @@ export async function fetchFromTMDB(imdbId, type) {
 
   try {
     // Step 1: 通过 IMDb ID 查找 TMDB 数据
-    const findUrl = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${CONFIG.TMDB_API_KEY}&external_source=imdb_id&language=zh-CN`;
+    const findUrl = `https://tmdb.demojameson.de5.net/3/find/${imdbId}?api_key=${CONFIG.TMDB_API_KEY}&external_source=imdb_id&language=zh-CN`;
     console.log(`[TMDB] 🌐 Find URL: ${findUrl.slice(0, 80)}...`);
 
     const findResp = await fetch(findUrl);
@@ -69,7 +69,7 @@ export async function fetchFromTMDB(imdbId, type) {
     console.log(`[TMDB] ✅ Found: tmdbId=${tmdbId}, title="${result.title || result.name}"`);
 
     // Step 2: 获取详细信息（季数 + 演员）
-    const detailUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN&append_to_response=credits`;
+    const detailUrl = `https://tmdb.demojameson.de5.net/3/${mediaType}/${tmdbId}?api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN&append_to_response=credits`;
     const detailResp = await fetch(detailUrl);
     const detailData = detailResp.ok ? await detailResp.json() : null;
 
@@ -264,7 +264,7 @@ export async function searchTmdbByTitle(title, year = null) {
 
   try {
     const encoded = encodeURIComponent(title);
-    const url = `https://api.themoviedb.org/3/search/tv?query=${encoded}&api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN${year ? `&first_air_date_year=${year}` : ''}`;
+    const url = `https://tmdb.demojameson.de5.net/3/search/tv?query=${encoded}&api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN${year ? `&first_air_date_year=${year}` : ''}`;
 
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -315,7 +315,7 @@ export async function fetchSeasonThumbnails(tmdbId, season) {
   console.log(`[TMDB] 🖼️ Fetching season ${season} thumbnails: tmdbId=${tmdbId}`);
 
   try {
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${season}?api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN`;
+    const url = `https://tmdb.demojameson.de5.net/3/tv/${tmdbId}/season/${season}?api_key=${CONFIG.TMDB_API_KEY}&language=zh-CN`;
     const resp = await fetch(url);
     if (!resp.ok) {
       console.error(`[TMDB] ❌ Season HTTP ${resp.status}`);
@@ -363,7 +363,7 @@ export async function fetchAlternativeTitles(tmdbId, type) {
   console.log(`[TMDB Alt] 🔍 Fetching alternative titles: tmdbId=${tmdbId}, type=${type}`);
 
   const mediaType = type === 'movie' ? 'movie' : 'tv';
-  const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/alternative_titles?api_key=${CONFIG.TMDB_API_KEY}`;
+  const url = `https://tmdb.demojameson.de5.net/3/${mediaType}/${tmdbId}/alternative_titles?api_key=${CONFIG.TMDB_API_KEY}`;
 
   try {
     const resp = await fetch(url);

@@ -95,6 +95,7 @@ function buildConfig() {
     FALLBACK_DOMAINS: [
       user.bd || '0996zp.com',
       // 'www.' + (user.bd || '0996zp.com'), // 兼容部分站点需要 www 前缀
+      'crs84e.com',
       'lwdys.com',
       '0bv77aw.com',
       '49duoaz.com',

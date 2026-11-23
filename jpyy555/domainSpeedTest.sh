@@ -7,6 +7,7 @@
 
 # ================= 配置 =================
 domains=(
+  "crs84e.com"
   "jpyy.podjgng.com"
   "0996zp.com"
   "www.lwdys.com"
