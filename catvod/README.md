@@ -295,12 +295,18 @@ curl -X POST "http://127.0.0.1:3000/debug/reload-rules"
 拉取清单 → 判断 master/media
   ├─ master：改写子清单为 /hls 入口（保留 sign）
   └─ media：
-      ├─ 按源正则剔除广告片段
-      ├─ 全局广告域名黑名单剔除
+      ├─ 调用共用内核 filter-playlist.js（与 m3u8-adfilter 同源）
+      │    ├─ 闸门：master / 直播 / 隐式 IV / 隐式 BYTERANGE 原样放行
+      │    ├─ 检测：路径关键词、私有注释、SCTE、KEY-NONE、异域名、素材复用
+      │    ├─ 分块打分 → 整块删除 → 结构守恒重建 → 自校验
+      │    └─ 自校验失败自动回滚原文
+      ├─ config/adRules.json 的源级规则经 adaptCleanerRules() 注入内核
       └─ 分片 URL 绝对化
 → 风险检测（片段减少 > 30% → 原样返回）
 → 返回清单
 ```
+
+> 旧版按源正则逐行删片的 `removeAdSegments()` 已不再参与主流程，仅作为遗留保留；文档中的“规则编译”描述对应其规则格式，实际由 `adaptCleanerRules()` 转成内核规则后使用。
 
 ### 规则编译
 
@@ -334,9 +340,12 @@ export const DEFAULT_HLS_CONFIG = {
 1. 直连源站（首选）
       ↓ 失败（404/timeout/非 m3u8）
 2. 代理（MANIFEST_PROXY_URL 配置时）
+   GET {PROXY}/hls?url=<encoded>&referer=<...>&ua=<...>
       ↓ 失败
 3. 307 重定向到原始 URL（由 /hls 路由层执行）
 ```
+
+默认代理路径为 `/hls`，可用 `MANIFEST_PROXY_PATH` 覆盖；hls_proxy 同时保留 `/m3u` 别名兼容旧客户端。
 
 **原因**：部分源站屏蔽数据中心 IP 段（Vercel、Cloudflare Worker 等），需通过代理绕过。但并非所有源都被屏蔽（如 ffzy/lz 直连可用），因此**直连优先，避免代理成为不必要的中转**。
 

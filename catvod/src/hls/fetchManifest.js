@@ -9,7 +9,8 @@
 //
 // 代理配置：
 //   MANIFEST_PROXY_URL=https://hls.wangqifei.eu.org
-//   代理接口：GET {PROXY}/m3u?url=<encoded>&referer=<...>&ua=<...>
+//   代理接口：GET {PROXY}/hls?url=<encoded>&referer=<...>&ua=<...>
+//   （hls_proxy 同时保留 /m3u 别名；路径可用 MANIFEST_PROXY_PATH 覆盖）
 //   代理侧从 query 读取 referer/ua，再带给源站。
 //
 // 每次尝试的 request/response 细节都记录到 attempts，便于诊断。
@@ -17,6 +18,7 @@
 import { log } from "../logger.js";
 
 const MANIFEST_PROXY = (process.env.MANIFEST_PROXY_URL || "").replace(/\/$/, "");
+const MANIFEST_PROXY_PATH = (process.env.MANIFEST_PROXY_PATH || "/hls").replace(/\/$/, "");
 const USE_PROXY = Boolean(MANIFEST_PROXY);
 
 /** 校验响应内容是否是合法 m3u8 */
@@ -30,7 +32,8 @@ function buildProxyUrl(targetUrl, { ua, referer }) {
   params.set("url", targetUrl);
   if (referer) params.set("referer", referer);
   if (ua) params.set("ua", ua);
-  return `${MANIFEST_PROXY}/m3u?${params.toString()}`;
+  const p = MANIFEST_PROXY_PATH.startsWith("/") ? MANIFEST_PROXY_PATH : "/" + MANIFEST_PROXY_PATH;
+  return `${MANIFEST_PROXY}${p}?${params.toString()}`;
 }
 
 /** 代理模式的请求头：UA/Referer 已在 query 里，这里只带 Accept */
