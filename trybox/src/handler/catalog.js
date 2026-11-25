@@ -7,8 +7,10 @@
  *   3. Genre 筛选（extra.genre）
  *
  * 缓存：
- *   - catalog:home（所有 page 共享，trybox 一次返回全部板块）
+ *   - catalog:{lang}:home（所有 section 共享，trybox 一次返回全部板块）
  *   - search:{query}:{type}
+ *
+ * 分页：extra.skip 由路由从 path 解析，按 PAGE_SIZE 切片返回
  */
 
 import { createLogger } from '../logger.js';
@@ -20,6 +22,15 @@ import { getText } from '../http.js';
 import { withCache } from '../cache.js';
 
 const log = createLogger('Catalog');
+
+// Stremio 分页步长：每次返回的最大条数
+const PAGE_SIZE = 50;
+
+/** 按 Stremio extra.skip 分页 */
+function applySkip(items, extra) {
+  const skip = Math.max(0, parseInt(extra.skip, 10) || 0);
+  return items.slice(skip, skip + PAGE_SIZE);
+}
 
 function parseCatalogId(id) {
   return id.replace(/^trybox_/, '');
@@ -48,14 +59,14 @@ function toMetaPreview(item) {
 /**
  * 从缓存或源头获取完整 catalog
  */
-async function getFullCatalog(env, headers) {
+async function getFullCatalog(env, headers, lang) {
   log.info('==================== Catalog 底层接口请求 ==================');
   log.info(`请求 catalog: ${TRYBOX_URLS.catalog}`);
   log.info(`请求 headers: ${JSON.stringify(headers)}`);
 
   const { value, fromCache } = await withCache({
     env,
-    key: 'catalog:home',
+    key: `catalog:${lang}:home`,
     l1Ttl: TTL.CATALOG_L1,
     redisTtl: TTL.CATALOG_REDIS,
     fetcher: async () => {
@@ -102,7 +113,7 @@ export async function catalogHandler({ type, id, extra = {}, config, env }) {
     }
     const tryboxType = type === 'series' ? 'tv' : 'movie';
     const results = await getSearchResult(env, headers, extra.search, tryboxType);
-    return { metas: results.map(toMetaPreview) };
+    return { metas: applySkip(results, extra).map(toMetaPreview) };
   }
 
   // 2. Genre 筛选
@@ -112,18 +123,18 @@ export async function catalogHandler({ type, id, extra = {}, config, env }) {
       log.warn(`未知 genre: ${extra.genre} type=${type}`);
       return { metas: [] };
     }
-    const decoded = await getFullCatalog(env, headers);
+    const decoded = await getFullCatalog(env, headers, lang);
     const items = decoded.result?.presets?.[preset] || [];
     const filtered = items.filter((it) => {
       const itIsTV = it.media_type === 'tv';
       return type === 'series' ? itIsTV : !itIsTV;
     });
-    return { metas: filtered.map(toMetaPreview) };
+    return { metas: applySkip(filtered, extra).map(toMetaPreview) };
   }
 
   // 3. 普通浏览
   log.info(`Catalog 浏览: section=${section} type=${type}`);
-  const decoded = await getFullCatalog(env, headers);
+  const decoded = await getFullCatalog(env, headers, lang);
 
   let items = [];
   if (section === 'home' || section === 'trending') {
@@ -157,6 +168,7 @@ export async function catalogHandler({ type, id, extra = {}, config, env }) {
     return type === 'series' ? itIsTV : !itIsTV;
   });
 
-  log.info(`Catalog 返回 ${filtered.length} 条`);
-  return { metas: filtered.map(toMetaPreview) };
+  const page = applySkip(filtered, extra);
+  log.info(`Catalog 返回 ${page.length} 条 (skip=${parseInt(extra.skip, 10) || 0})`);
+  return { metas: page.map(toMetaPreview) };
 }

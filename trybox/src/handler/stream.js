@@ -162,7 +162,7 @@ export async function streamHandler({ type, id, config, env }) {
   const target = { tmdbId: Number(tmdbId), kind, season, episode };
 
   log.info('==================================================');
-  log.info(`请求 stream: ${kind} tmdb=${tmdbId}${season ? ` season=${season}  episode=${episode}` : ''}`);
+  log.info(`📺 请求 stream: ${kind} tmdb=${tmdbId}${season ? ` season=${season}  episode=${episode}` : ''}`);
 
   const payload = buildStreamPayload(target);
   const url = `${TRYBOX_URLS.stream}?payload=${encodeURIComponent(JSON.stringify(payload))}`;

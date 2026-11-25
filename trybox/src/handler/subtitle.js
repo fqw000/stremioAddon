@@ -32,7 +32,7 @@ function normalizeLang(raw) {
 
 async function fetchSubtitles(env, config, imdbId, lang) {
   log.info('==================== Subtitle 底层接口请求 ==================');
-  log.info(`请求字幕: ${TRYBOX_URLS.subtitle}?imdb_id=${imdbId}${lang ? `&language=${lang}` : ''}`);
+  log.info(`📖 请求字幕: ${TRYBOX_URLS.subtitle}?imdb_id=${imdbId}${lang ? `&language=${lang}` : ''}`);
 
   const key = `subtitle:${imdbId}:${lang || 'all'}`;
   const { value, fromCache } = await withCache({
@@ -120,7 +120,14 @@ export async function subtitleHandler({ type, id, config, env }) {
   // zh-en 保持 null（全量，本地过滤）
   const subs = await fetchSubtitles(env, config, imdbId, apiLang);
 
+
+// 每个语种最多返回多少条（可被 config 覆盖）
+  const perLangLimit = Number(config.subtitlePerLangLimit) || 50;
+
   const result = [];
+  const langCount = { zh: 0, en: 0 };
+  let truncated = 0;
+
   for (const s of subs) {
     const normalizedLang = normalizeLang(s.language);
     if (!normalizedLang) continue;
@@ -128,8 +135,14 @@ export async function subtitleHandler({ type, id, config, env }) {
     if (subLang === 'zh' && normalizedLang !== 'zh') continue;
     if (subLang === 'en' && normalizedLang !== 'en') continue;
 
-    const TRYBOX_BASE = 'https://trybox.app';
+    // 每语种配额
+    if (langCount[normalizedLang] >= perLangLimit) {
+      truncated++;
+      continue;
+    }
+    langCount[normalizedLang]++;
 
+    const TRYBOX_BASE = 'https://trybox.app';
     function toAbsoluteUrl(raw) {
       if (!raw) return '';
       if (/^https?:\/\//.test(raw)) return raw;
@@ -143,6 +156,16 @@ export async function subtitleHandler({ type, id, config, env }) {
     });
   }
 
-  log.info(`返回 ${result.length}/${subs.length} 条字幕（subLang=${subLang}）`);
+
+    // 用来核对底层接口字幕language类型  临时测试。
+  const langDist = {};
+  for (const s of subs) {
+    const k = JSON.stringify(s.language) + ' | ' + (s.label || s.name || '');
+    langDist[k] = (langDist[k] || 0) + 1;
+  }
+   log.info(
+    `返回 ${result.length}/${subs.length} 条字幕（subLang=${subLang}, ` +
+    `zh=${langCount.zh}, en=${langCount.en}, 每语种上限=${perLangLimit}, 截断=${truncated}）`
+  );
   return { subtitles: result };
 }

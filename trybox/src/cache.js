@@ -19,6 +19,9 @@ const log = createLogger('Cache');
 // ────────────────────────────────────────────────────────────
 const l1 = new Map();
 
+// single-flight：在途回源任务表（key 为完整缓存 key）
+const inflight = new Map();
+
 function l1Get(key) {
   const item = l1.get(key);
   if (!item) return null;
@@ -172,14 +175,29 @@ export async function withCache({ env, key, l1Ttl, redisTtl, fetcher, shouldCach
     return { value: cached, fromCache: true };
   }
 
-  log.debug(`[CACHE MISS] ${key}`);
-  const value = await fetcher();
-
-  const allow = shouldCache ? shouldCache(value) : true;
-  if (allow) {
-    await setCache(env, key, value, { l1Ttl, redisTtl });
+  // single-flight：同一 key 的并发回源合并成一个在途 Promise
+  const fullKey = prefixKey(env, 'cache', key);
+  const pending = inflight.get(fullKey);
+  if (pending) {
+    log.debug(`[INFLIGHT HIT] ${key}`);
+    return pending;
   }
-  return { value, fromCache: false };
+
+  log.debug(`[CACHE MISS] ${key}`);
+  const task = (async () => {
+    try {
+      const value = await fetcher();
+      const allow = shouldCache ? shouldCache(value) : true;
+      if (allow) {
+        await setCache(env, key, value, { l1Ttl, redisTtl });
+      }
+      return { value, fromCache: false };
+    } finally {
+      inflight.delete(fullKey);
+    }
+  })();
+  inflight.set(fullKey, task);
+  return task;
 }
 
 // ────────────────────────────────────────────────────────────

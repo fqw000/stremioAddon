@@ -64,13 +64,24 @@ export const GENRE_MAP = {
   },
 };
 
-/** 字幕语言映射（仅保留中英文） */
+
+/** 字幕语言映射（仅保留中英文；key 必须小写，normalizeLang 会 toLowerCase） */
 export const LANG_MAP = {
+  // ─── 中文：ISO 代码 / 全名 / 地区 / 文字子标签 / 常见简写 ───
   zh: 'zh', zho: 'zh', chi: 'zh', chinese: 'zh',
   'zh-cn': 'zh', 'zh-tw': 'zh', 'zh-hk': 'zh',
+  'zh-hans': 'zh', 'zh-hant': 'zh',                 // BCP 47 文字子标签
+  'zh-hant-hk': 'zh', 'zh-hant-tw': 'zh',           // 繁体 + 地区
+  zht: 'zh',                                        // 非标准"繁中"简写
+  cn: 'zh', hk: 'zh', tw: 'zh',                     // 地区简写（tw 数据已出现）
+  'zh-cn-zh': 'zh',                                 // 防御：疑似脏数据，映射中文安全
+
+  // ─── 英文：ISO 代码 / 全名 / 地区 ───
   en: 'en', eng: 'en', english: 'en',
   'en-us': 'en', 'en-gb': 'en',
 };
+
+
 
 /** 缓存 TTL（秒） */
 export const TTL = {
