@@ -77,17 +77,16 @@ function collectConfig() {
   const tk = document.getElementById('tk').value.trim();
   if (tk) cfg.tk = tk;
 
+  // 用户标识 uid：所有安装链接都带，全量日志汇总靠它区分不同用户
+  cfg.uid = getOrCreateDebugUid();
+
   // debug 开关（仅开启时写入，减小 URL 长度）
-  // 同时写入随机 uid：全局日志汇总靠它区分不同用户（同一浏览器稳定，清 localStorage 后更换）
-  if (document.getElementById('dbg').checked) {
-    cfg.dbg = true;
-    cfg.uid = getOrCreateDebugUid();
-  }
+  if (document.getElementById('dbg').checked) cfg.dbg = true;
 
   return cfg;
 }
 
-// 调试用户标识：8 位随机值，localStorage 持久化；仅 debug 开启时进入 cfg
+// 用户标识：8 位随机值，localStorage 持久化；所有安装链接都带，用于日志汇总区分用户
 function getOrCreateDebugUid() {
   try {
     let uid = localStorage.getItem('trybox_dbg_uid');

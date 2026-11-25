@@ -39,6 +39,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT) 
  * GET 请求，返回 text
  */
 export async function getText(url, headers = {}, options = {}) {
+  log.info('==================== 底层接口请求 ==================');
+  log.info('【 请求路径 】', url);
+  log.info('【  请求头  】', headers);
+  log.info('【 请求选项 】', options);
+  log.info('==================================================');
+
   const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {
@@ -67,6 +73,11 @@ export async function getText(url, headers = {}, options = {}) {
  * POST 请求（JSON body），返回 text
  */
 export async function postText(url, body, headers = {}, options = {}) {
+  log.info('==================== Stream 底层接口请求 ==================');
+  log.info('【 请求路径 】', url);
+  log.info('【  请求头  】', headers);
+  log.info('【 请求选项 】', options);
+  log.info('==================================================');
   const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {

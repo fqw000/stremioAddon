@@ -49,6 +49,10 @@ function toMetaPreview(item) {
  * 从缓存或源头获取完整 catalog
  */
 async function getFullCatalog(env, headers) {
+  log.info('==================== Catalog 底层接口请求 ==================');
+  log.info(`请求 catalog: ${TRYBOX_URLS.catalog}`);
+  log.info(`请求 headers: ${JSON.stringify(headers)}`);
+
   const { value, fromCache } = await withCache({
     env,
     key: 'catalog:home',

@@ -29,13 +29,15 @@ function finalize(res, context) {
   return res;
 }
 
-// 生成日志页 HTML。
-// globalMode=true：读全局 debug 流（所有开启 debug 的用户，靠 cfg 区分），不写自身访问日志。
-function logsHtml(scope, globalMode) {
-  const modeLabel = globalMode ? '全局调试流（所有已开启 debug 的用户）' : '当前配置 scope=' + scope;
-  const modeHint = globalMode
-    ? '全局视图只收录<b>开启 debug</b> 的用户日志，每行以 <code>[user=随机值]</code> 区分来源；日志页自身轮询不再写入日志。'
-    : '当前作用域 <code>' + scope + '</code>。未带 cfg 的 <code>/api/logs?format=html</code> 显示全局 debug 流。';
+// 生成日志页 HTML。view: 'all'(所有用户) | 'debug'(debug用户) | 'personal'(当前配置)
+function logsHtml(scope, view) {
+  const viewLabel = view === 'all' ? '所有用户（info+）'
+    : view === 'debug' ? 'debug 用户（debug+）'
+    : '当前配置 scope=' + scope;
+  const viewHint = view === 'personal'
+    ? '个人视图按 cfg 隔离，只显示当前配置的日志。顶部可切换到全局汇总。'
+    : '全局汇总以 <code>[user=随机值]</code> 区分来源；日志页自身轮询不写入日志。';
+  const opt = (v, t) => `<option value="${v}"${view === v ? ' selected' : ''}>${t}</option>`;
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TryBox 运行日志</title><style>
 :root{color-scheme:light}body{margin:0;background:#0f172a;color:#e2e8f0;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 header{position:sticky;top:0;background:#1e293b;padding:12px 16px;border-bottom:1px solid #334155;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -46,24 +48,27 @@ button{cursor:pointer}label{display:flex;gap:5px;align-items:center;color:#94a3b
 .tag{color:#38bdf8}.user{color:#c084fc}.hint{color:#94a3b8;font-size:11px;padding:8px 16px 0}code{background:#1e293b;padding:2px 6px;border-radius:4px}
 #pause{min-width:88px}
 </style></head><body><header><h1>TryBox 运行日志</h1>
+<select id="view" title="日志范围">${opt('all', '所有用户')}${opt('debug', 'debug 用户')}${opt('personal', '当前配置')}</select>
 <select id="level"><option value="debug">DEBUG+</option><option value="info" selected>INFO+</option><option value="warn">WARN+</option><option value="error">ERROR</option></select>
 <input type="text" id="q" placeholder="过滤：Stream / tt5034838 / user=a1b2c3d4" size="26">
 <button id="pause">⏸ 暂停接收</button>
 <button id="clear">清空</button><button id="now">立即刷新</button><span id="stat"></span></header>
-<p class="hint">${modeLabel}。${modeHint} 请求进出看 <span class="tag">Edge</span>，取流链路看 <span class="tag">Stream</span>。时间为北京时间（UTC+8）。</p>
+<p class="hint">当前范围：<b>${viewLabel}</b>。${viewHint} 请求进出看 <span class="tag">Edge</span>，取流链路看 <span class="tag">Stream</span>。时间为北京时间（UTC+8）。</p>
 <div id="list"></div><script>
 var SCOPE=${JSON.stringify(scope)};
-var GLOBAL=${globalMode ? 'true' : 'false'};
+var VIEW=${JSON.stringify(view)};
 var $=function(id){return document.getElementById(id)};
 var esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')};
 // 后端 ts 为 UTC ISO；+8h 后取时间部分即北京时间
 function bj(ts){try{return new Date(new Date(ts).getTime()+8*3600*1000).toISOString().slice(11,23)}catch(e){return String(ts).slice(11,23)}}
 var paused=false;
+function scopeParams(){
+  return VIEW==='personal'?{scope:SCOPE}:{view:VIEW};
+}
 function refresh(){
-  var p=new URLSearchParams({level:$('level').value,q:$('q').value,limit:'400'});
-  if(GLOBAL) p.set('global','1'); else p.set('scope',SCOPE);
+  var p=new URLSearchParams(Object.assign({level:$('level').value,q:$('q').value,limit:'400'},scopeParams()));
   fetch('/api/logs?'+p.toString()).then(function(r){return r.json()}).then(function(d){
-    $('stat').textContent='累计 '+d.total+' 条 / 缓冲 '+d.buffered+' 条 / 控制台 '+d.consoleLevel+' / 存储 '+d.store+(GLOBAL?' / 全局':'');
+    $('stat').textContent='['+VIEW+'] 累计 '+d.total+' 条 / 缓冲 '+d.buffered+' 条 / 控制台 '+d.consoleLevel+' / 存储 '+d.store;
     var out='';
     for(var i=0;i<d.logs.length;i++){var e=d.logs[i];
       var rid=(e.ctx&&e.ctx.reqId)?'('+esc(e.ctx.reqId)+') ':'';
@@ -81,8 +86,9 @@ $('pause').onclick=function(){
   this.textContent=paused?'▶ 继续接收':'⏸ 暂停接收';
   $('stat').style.color=paused?'#fbbf24':'#94a3b8';
 };
-$('clear').onclick=function(){var p=new URLSearchParams(GLOBAL?{global:'1'}:{scope:SCOPE});p.set('clear','1');fetch('/api/logs?'+p.toString()).then(refresh)};
+$('clear').onclick=function(){var p=new URLSearchParams(scopeParams());p.set('clear','1');fetch('/api/logs?'+p.toString()).then(refresh)};
 $('level').onchange=refresh;$('q').oninput=refresh;
+$('view').onchange=function(){VIEW=this.value;refresh()};
 setInterval(function(){if(!paused)refresh()},3000);
 refresh();
 </script></body></html>`;
@@ -94,9 +100,13 @@ export default async function (request, context) {
   const cfgParam = url.searchParams.get('cfg') || '';
   const scopeParam = url.searchParams.get('scope') || '';
   const logRoute = isLogRoute(url.pathname);
-  // 未带 cfg / scope 的日志路由 = 全局调试视图；带 cfg / scope = 个人视图
-  const globalMode = logRoute && !cfgParam && !scopeParam;
   const scope = scopeParam || scopeFromCfg(cfgParam);
+  // 视图三态：all(所有用户) | debug(debug用户) | personal(当前配置)
+  // URL 未指定 view 时：带 cfg/scope → personal；否则默认 all（还原"看所有用户"）
+  const viewParam = url.searchParams.get('view') || '';
+  const view = ['all', 'debug', 'personal'].includes(viewParam)
+    ? viewParam
+    : (cfgParam || scopeParam ? 'personal' : 'all');
 
   // 解析 cfg：debug 开关 + 随机 uid（用于全局汇总区分用户）
   let cfgDebug = false;
@@ -127,20 +137,20 @@ export default async function (request, context) {
   // 日志接口 / 页面（在 handleRequest 之前处理，避免被当 404）
   if (logRoute) {
     if (url.searchParams.get('clear') === '1') {
-      await clearLogs({ global: globalMode });
-      return finalize(new Response(JSON.stringify({ ok: true, cleared: true, global: globalMode, ...logStats() }), {
+      await clearLogs({ view });
+      return finalize(new Response(JSON.stringify({ ok: true, cleared: true, view, ...logStats() }), {
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
       }), context);
     }
     if (url.searchParams.get('format') === 'html') {
-      return finalize(new Response(logsHtml(scope, globalMode), {
+      return finalize(new Response(logsHtml(scope, view), {
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
       }), context);
     }
     const level = url.searchParams.get('level') || 'debug';
     const limit = Number(url.searchParams.get('limit')) || 200;
     const q = url.searchParams.get('q') || '';
-    return finalize(new Response(JSON.stringify({ ok: true, global: globalMode, ...logStats(), logs: await getLogs({ level, limit, q, global: globalMode }) }), {
+    return finalize(new Response(JSON.stringify({ ok: true, view, ...logStats(), logs: await getLogs({ level, limit, q, view }) }), {
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' },
     }), context);
   }

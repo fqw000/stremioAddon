@@ -15,7 +15,8 @@ const LEVELS = { debug: 10, info: 20, warn: 30, error: 40, silent: 99 };
 const LABEL = { debug: 'DEBUG', info: 'INFO ', warn: 'WARN ', error: 'ERROR' };
 const RING_MAX = 300;      // 内存降级缓冲上限（Redis 上限同此值）
 const RATE_TTL = 60000;    // 限频窗口
-const GLOBAL_SCOPE = '__debug_all__'; // 全局 debug 流 scope
+const ALL_SCOPE = '__all__';       // 全量汇总流：所有用户 info+
+const GLOBAL_SCOPE = '__debug_all__'; // debug 汇总流：仅 debug 用户 debug+
 // 允许出现在 cfg 标识里的非敏感字段；rt/at/tk 等凭证一律排除
 const SAFE_CFG_KEYS = ['dbg', 'uid', 'cats', 'feats', 'lang', 'subLang', 'removeIdValidation', 'srcs', 'bd', 'd555', 'imdb', 'stream', 'banIp'];
 
@@ -77,19 +78,20 @@ export function safeCfgTag(cfgParam) {
 }
 
 // ── Redis 后端 ────────────────────────────────────────────
-// 个人流 key  = {APP_PREFIX}:logs:{scope}
-// 全局流 key  = {APP_PREFIX}:logs:__debug_all__（仅 debug 用户写入）
+// 个人流 key  = {APP_PREFIX}:logs:{scope}          （每个 cfg 一条）
+// 全量流 key  = {APP_PREFIX}:logs:__all__          （所有用户 info+，页面「所有用户」视图）
+// debug流 key = {APP_PREFIX}:logs:__debug_all__    （仅 debug 用户 debug+，页面「debug用户」视图）
 export function initLogStore(env, { prefix, scope, debugUser, cfgTag, uid, globalScope } = {}) {
   const url = env?.UPSTASH_REDIS_REST_URL || '';
   const token = env?.UPSTASH_REDIS_REST_TOKEN || '';
   const p = prefix || env?.APP_PREFIX || 'trybox';
   const s = scope || 'default';
-  const g = globalScope || GLOBAL_SCOPE;
   storeCfg = (url && token) ? {
     url,
     token,
     key: `${p}:logs:${s}`,
-    globalKey: `${p}:logs:${g}`,
+    allKey: `${p}:logs:${ALL_SCOPE}`,
+    globalKey: `${p}:logs:${globalScope || GLOBAL_SCOPE}`,
     scope: s,
     debugUser: !!debugUser,
     cfgTag: cfgTag || '',
@@ -128,11 +130,22 @@ function persist(level, entry) {
     ['LTRIM', storeCfg.key, 0, RING_MAX - 1],
     ['EXPIRE', storeCfg.key, '604800'],
   ];
-  // 全局 debug 流：只有开启 debug 的请求写入，带脱敏 cfg 标识用于区分用户/配置。
-  // 没开 debug 的请求不写全局流，管理员页因此只刷 debug 用户的日志。
+  // 带用户来源的条目（全量流 / debug 流共用）：uid 明文 + scope
+  const whoEntry = {
+    ...entry,
+    cfg: storeCfg.cfgTag || 'cfg=<default>',
+    scope: storeCfg.scope,
+    uid: storeCfg.uid || '',
+  };
+  const whoPayload = JSON.stringify(whoEntry);
+  // 全量流：所有请求都汇总（跟随 globalLevel 过滤），供页面「所有用户」视图
+  cmds.push(['LPUSH', storeCfg.allKey, whoPayload]);
+  cmds.push(['LTRIM', storeCfg.allKey, 0, RING_MAX - 1]);
+  cmds.push(['EXPIRE', storeCfg.allKey, '604800']);
+  // debug 流：只有开启 debug 的请求写入，供页面「debug用户」视图。
+  // 没开 debug 的请求不写此流。
   if (storeCfg.debugUser) {
-    const gEntry = { ...entry, cfg: storeCfg.cfgTag || 'cfg=<default>', scope: storeCfg.scope, uid: storeCfg.uid || '' };
-    cmds.push(['LPUSH', storeCfg.globalKey, JSON.stringify(gEntry)]);
+    cmds.push(['LPUSH', storeCfg.globalKey, whoPayload]);
     cmds.push(['LTRIM', storeCfg.globalKey, 0, RING_MAX - 1]);
     cmds.push(['EXPIRE', storeCfg.globalKey, '604800']);
   }
@@ -223,10 +236,13 @@ function fromRing(options) {
 }
 
 export async function getLogs(options = {}) {
-  const { limit = 200, level = 'debug', since = 0, q = '', global: useGlobal = false } = options;
+  const { limit = 200, level = 'debug', since = 0, q = '', global: useGlobal = false, view = '' } = options;
   if (!redisAvailable()) return fromRing(options);
 
-  const key = useGlobal ? storeCfg.globalKey : storeCfg.key;
+  // view: 'personal'(个人) | 'all'(所有用户) | 'debug'(debug用户)；global 为旧别名 → debug
+  const key = view === 'all' ? storeCfg.allKey
+    : (view === 'debug' || useGlobal) ? storeCfg.globalKey
+    : storeCfg.key;
   const data = await redisPipeline([['LRANGE', key, 0, RING_MAX - 1]]);
   const raw = data?.[0]?.result;
   if (!Array.isArray(raw) || raw.length === 0) return fromRing(options);
@@ -246,7 +262,10 @@ export async function getLogs(options = {}) {
 
 export async function clearLogs(options = {}) {
   ring.length = 0;
-  const key = options.global ? storeCfg.globalKey : storeCfg.key;
+  const { global: useGlobal = false, view = '' } = options;
+  const key = view === 'all' ? storeCfg.allKey
+    : (view === 'debug' || useGlobal) ? storeCfg.globalKey
+    : storeCfg.key;
   if (redisAvailable() && key) await redisPipeline([['DEL', key]]);
 }
 
