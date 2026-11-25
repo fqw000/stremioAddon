@@ -78,9 +78,27 @@ function collectConfig() {
   if (tk) cfg.tk = tk;
 
   // debug 开关（仅开启时写入，减小 URL 长度）
-  if (document.getElementById('dbg').checked) cfg.dbg = true;
+  // 同时写入随机 uid：全局日志汇总靠它区分不同用户（同一浏览器稳定，清 localStorage 后更换）
+  if (document.getElementById('dbg').checked) {
+    cfg.dbg = true;
+    cfg.uid = getOrCreateDebugUid();
+  }
 
   return cfg;
+}
+
+// 调试用户标识：8 位随机值，localStorage 持久化；仅 debug 开启时进入 cfg
+function getOrCreateDebugUid() {
+  try {
+    let uid = localStorage.getItem('trybox_dbg_uid');
+    if (!uid) {
+      uid = Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('trybox_dbg_uid', uid);
+    }
+    return uid;
+  } catch (e) {
+    return Math.random().toString(36).slice(2, 10);
+  }
 }
 
 // ============================================================
@@ -150,13 +168,36 @@ function bindEvents() {
   });
 
   // 查看运行日志：带上当前 cfg，确保 scope 与安装地址一致
-  document.getElementById('logsBtn').addEventListener('click', () => {
+  const logsBtn = document.getElementById('logsBtn');
+  if (logsBtn) logsBtn.addEventListener('click', () => {
     const cfg = collectConfig();
     const baseUrl = window.location.origin;
     const url = Object.keys(cfg).length
       ? `${baseUrl}/api/logs?format=html&cfg=${base64urlEncode(JSON.stringify(cfg))}`
       : `${baseUrl}/api/logs?format=html`;
     window.open(url, '_blank');
+  });
+
+  // 调试入口默认隐藏：连续点击底部访客统计图标 4 次（5 秒内）才显示
+  bindVisitorUnlock();
+}
+
+function bindVisitorUnlock() {
+  const badge = document.getElementById('visitorBadge');
+  const section = document.getElementById('logsSection');
+  if (!badge || !section) return;
+  let clicks = 0;
+  let timer = null;
+  badge.style.cursor = 'pointer';
+  badge.addEventListener('click', () => {
+    clicks += 1;
+    clearTimeout(timer);
+    timer = setTimeout(() => { clicks = 0; }, 5000); // 5 秒内未完成 4 击则重置
+    if (clicks >= 4) {
+      section.style.display = '';
+      clearTimeout(timer);
+      clicks = 0;
+    }
   });
 }
 

@@ -143,15 +143,15 @@
         </div>
       </section>
 
-      <!-- 运行日志 -->
-      <section class="group">
+      <!-- 运行日志（默认隐藏，连点底部访客图标 4 次显示） -->
+      <section class="group" id="logsSection" style="display:none">
         <h2 class="group-title">运行日志</h2>
-        <p class="group-desc">勾选 debug 并安装后，点播放即可在此实时查看完整链路日志（按当前配置隔离）</p>
+        <p class="group-desc">调试入口：带 cfg 只看当前配置，不带 cfg 显示所有已开启 debug 用户的实时日志</p>
         <div class="card">
           <div class="setting">
             <div class="setting-info">
               <span class="setting-label">实时日志页</span>
-              <span class="setting-desc">自动刷新、可按级别/关键词过滤、支持清空当前配置的日志</span>
+              <span class="setting-desc">自动刷新、可暂停、按级别/关键词过滤；时间为北京时间</span>
             </div>
             <button class="btn-copy" id="logsBtn">查看运行日志 →</button>
           </div>
@@ -182,7 +182,7 @@
 
       <p class="footer-hint">Made with ❤️ for Stremio Community</p>
       <p class="footer-hint">  wangqifei.eu.org </p>
-      <p class="footer-hint"><img src="https://visitor-badge.laobi.icu/badge?page_id=tryboxStremioAddon;left_text=Visitors" alt="Visitors"></p>
+      <p class="footer-hint"><img id="visitorBadge" src="https://visitor-badge.laobi.icu/badge?page_id=tryboxStremioAddon;left_text=Visitors" alt="Visitors" title="访客统计"></p>
     </footer>
   </div>
 

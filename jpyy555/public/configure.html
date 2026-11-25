@@ -46,15 +46,17 @@
       <h2><span class="icon">⚙️</span> 高级配置</h2>
       <p class="hint">全部为可选项，不填则使用默认值</p>
 
-      <!-- 运行日志 -->
+      <!-- 运行日志：dbg 开关保留；日志页入口默认隐藏，连点底部访客图标 4 次显示 -->
       <div class="form-group">
         <label>运行日志 <span class="optional">排查故障时用</span></label>
         <label class="checkbox-item">
           <input type="checkbox" id="dbg" />
           <span>开启调试模式（debug）：写入完整运行日志。仅在排查故障时临时开启，关闭后只记录常规信息</span>
         </label>
-        <button type="button" class="btn btn-secondary" id="logsBtn" style="margin-top:8px">📋 查看运行日志 →</button>
-        <span class="form-hint">日志页按当前配置隔离，需带相同 cfg 才能看到对应记录；勾选 debug 并安装后点播放即可实时查看</span>
+        <span id="logsEntry" style="display:none">
+          <button type="button" class="btn btn-secondary" id="logsBtn" style="margin-top:8px">📋 查看运行日志 →</button>
+          <span class="form-hint">带 cfg 只看当前配置，不带 cfg 显示所有已开启 debug 用户的实时日志；可暂停，时间为北京时间</span>
+        </span>
       </div>
 
       <!-- 影视源开关 -->
@@ -312,7 +314,7 @@
     <footer>
       <p>MIT License · Made with ❤️ for Stremio Community</p>
          <p >  wangqifei.eu.org </p>
-      <p><img style="width: auto; vertical-align: middle " src="https://visitor-badge.laobi.icu/badge?page_id=jpyy555StremioAddon;left_text=Visitors" alt="Visitors"></p>
+      <p><img id="visitorBadge" style="width: auto; vertical-align: middle; cursor: pointer" src="https://visitor-badge.laobi.icu/badge?page_id=jpyy555StremioAddon;left_text=Visitors" alt="Visitors" title="访客统计"></p>
     </footer>
 
   </div>

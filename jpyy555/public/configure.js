@@ -170,9 +170,27 @@
         }
 
         // ===== 调试模式 =====
-        if (el.dbg && el.dbg.checked) config.dbg = true;
+        // 同时写入随机 uid：全局日志汇总靠它区分不同用户（同一浏览器稳定）
+        if (el.dbg && el.dbg.checked) {
+            config.dbg = true;
+            config.uid = getOrCreateDebugUid();
+        }
 
         return config;
+    }
+
+    // 调试用户标识：8 位随机值，localStorage 持久化；仅 debug 开启时进入 cfg
+    function getOrCreateDebugUid() {
+        try {
+            let uid = localStorage.getItem('jpyy555_dbg_uid');
+            if (!uid) {
+                uid = Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('jpyy555_dbg_uid', uid);
+            }
+            return uid;
+        } catch (e) {
+            return Math.random().toString(36).slice(2, 10);
+        }
     }
 
     /**
@@ -380,6 +398,26 @@
         const qs = Object.keys(config).length ? '?format=html&cfg=' + encodeConfig(config) : '?format=html';
         window.open(base + '/api/logs' + qs, '_blank');
     });
+
+    // 调试入口默认隐藏：连续点击底部访客统计图标 4 次（5 秒内）才显示
+    bindVisitorUnlock();
+
+    function bindVisitorUnlock() {
+        const badge = $('visitorBadge');
+        const entry = $('logsEntry');
+        if (!badge || !entry) return;
+        let clicks = 0, timer = null;
+        badge.addEventListener('click', () => {
+            clicks += 1;
+            clearTimeout(timer);
+            timer = setTimeout(() => { clicks = 0; }, 5000);
+            if (clicks >= 4) {
+                entry.style.display = '';
+                clearTimeout(timer);
+                clicks = 0;
+            }
+        });
+    }
 
     // ===== 源开关变化：联动 + 更新结果 =====
     document.querySelectorAll('.source-cb').forEach(cb => {

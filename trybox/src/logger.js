@@ -2,7 +2,8 @@
 //
 // 设计见 /Users/wangqifei/Documents/stremio/stremioAddon/日志系统规范.md
 // - 常态写 info+；配置页 debug 打开时该请求写 debug+
-// - Edge Runtime 兼容：仅用 Web Standard API（fetch / atob / TextEncoder）
+// - 全局调试流：仅 debug 用户写入 {prefix}:logs:__debug_all__，带脱敏 cfg 标识
+// - Edge Runtime 兼容：仅用 Web Standard API（fetch / atob / btoa / TextEncoder）
 // - Redis 不可用时静默降级到内存缓冲，不影响业务
 //
 // 用法（兼容旧签名）：
@@ -14,9 +15,12 @@ const LEVELS = { debug: 10, info: 20, warn: 30, error: 40, silent: 99 };
 const LABEL = { debug: 'DEBUG', info: 'INFO ', warn: 'WARN ', error: 'ERROR' };
 const RING_MAX = 300;      // 内存降级缓冲上限（Redis 上限同此值）
 const RATE_TTL = 60000;    // 限频窗口
+const GLOBAL_SCOPE = '__debug_all__'; // 全局 debug 流 scope
+// 允许出现在 cfg 标识里的非敏感字段；rt/at/tk 等凭证一律排除
+const SAFE_CFG_KEYS = ['dbg', 'uid', 'cats', 'feats', 'lang', 'subLang', 'removeIdValidation', 'srcs', 'bd', 'd555', 'imdb', 'stream', 'banIp'];
 
 let globalLevel = 'info';      // 控制台输出级别
-let storeCfg = null;           // { url, token, key }
+let storeCfg = null;           // { url, token, key, globalKey, scope, debugUser, cfgTag }
 const ring = [];               // 内存缓冲（Redis 写入失败的降级 / 本地开发）
 const rateState = new Map();
 const pendingWrites = [];      // 待完成的 Redis 写入 Promise，由入口用 context.waitUntil() 兜底
@@ -49,14 +53,48 @@ export function scopeFromCfg(cfg) {
   return 'u' + (h >>> 0).toString(36).slice(0, 6);
 }
 
+// ── cfg 安全标识 ────────────────────────────────────────────
+// 全局日志靠 cfg 区分用户/配置，但绝不能泄露 rt/at/tk 等凭证。
+// 只保留非敏感白名单字段后重新编码；仅 dbg:true 时结果恰为 eyJkYmciOnRydWV9。
+export function safeCfgTag(cfgParam) {
+  if (!cfgParam) return 'cfg=<default>';
+  try {
+    let b64 = String(cfgParam).replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const obj = JSON.parse(atob(b64));
+    const safe = {};
+    for (const k of SAFE_CFG_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) safe[k] = obj[k];
+    }
+    const names = Object.keys(safe);
+    if (!names.length) return 'cfg=<none>';
+    const json = JSON.stringify(safe);
+    const enc = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return 'cfg=' + enc;
+  } catch (e) {
+    return 'cfg=<invalid>';
+  }
+}
+
 // ── Redis 后端 ────────────────────────────────────────────
-// key = {APP_PREFIX}:logs:{scope}，两级隔离：项目前缀 + 用户配置
-export function initLogStore(env, { prefix, scope } = {}) {
+// 个人流 key  = {APP_PREFIX}:logs:{scope}
+// 全局流 key  = {APP_PREFIX}:logs:__debug_all__（仅 debug 用户写入）
+export function initLogStore(env, { prefix, scope, debugUser, cfgTag, uid, globalScope } = {}) {
   const url = env?.UPSTASH_REDIS_REST_URL || '';
   const token = env?.UPSTASH_REDIS_REST_TOKEN || '';
   const p = prefix || env?.APP_PREFIX || 'trybox';
   const s = scope || 'default';
-  storeCfg = (url && token) ? { url, token, key: `${p}:logs:${s}`, scope: s } : null;
+  const g = globalScope || GLOBAL_SCOPE;
+  storeCfg = (url && token) ? {
+    url,
+    token,
+    key: `${p}:logs:${s}`,
+    globalKey: `${p}:logs:${g}`,
+    scope: s,
+    debugUser: !!debugUser,
+    cfgTag: cfgTag || '',
+    uid: uid || '',
+  } : null;
 }
 
 function redisAvailable() { return !!storeCfg; }
@@ -83,14 +121,22 @@ async function redisPipeline(commands) {
 // 不阻塞业务响应；Promise 挂入 pendingWrites，由入口 context.waitUntil() 在响应后等待完成，
 // 避免 Vercel Edge 在 response 返回后立即冻结实例导致日志 POST 被掐断。
 function persist(level, entry) {
-  if (!redisAvailable()) return;                 // 降级：只留内存
+  if (!redisAvailable()) return;                  // 降级：只留内存
   if (LEVELS[level] < LEVELS[globalLevel]) return; // 常态只写 info+
-  const payload = JSON.stringify(entry);
-  const p = redisPipeline([
-    ['LPUSH', storeCfg.key, payload],
+  const cmds = [
+    ['LPUSH', storeCfg.key, JSON.stringify(entry)],
     ['LTRIM', storeCfg.key, 0, RING_MAX - 1],
     ['EXPIRE', storeCfg.key, '604800'],
-  ]).catch(() => {});
+  ];
+  // 全局 debug 流：只有开启 debug 的请求写入，带脱敏 cfg 标识用于区分用户/配置。
+  // 没开 debug 的请求不写全局流，管理员页因此只刷 debug 用户的日志。
+  if (storeCfg.debugUser) {
+    const gEntry = { ...entry, cfg: storeCfg.cfgTag || 'cfg=<default>', scope: storeCfg.scope, uid: storeCfg.uid || '' };
+    cmds.push(['LPUSH', storeCfg.globalKey, JSON.stringify(gEntry)]);
+    cmds.push(['LTRIM', storeCfg.globalKey, 0, RING_MAX - 1]);
+    cmds.push(['EXPIRE', storeCfg.globalKey, '604800']);
+  }
+  const p = redisPipeline(cmds).catch(() => {});
   pendingWrites.push(p);
 }
 
@@ -103,7 +149,8 @@ export function flushLogWrites() {
 
 // ── emit ──────────────────────────────────────────────────
 function stamp() {
-  return new Date().toISOString().slice(11, 23);
+  // 北京时间（UTC+8）显示，终端与日志页保持一致
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 23);
 }
 
 function emit(level, tag, msg, ctx = {}) {
@@ -171,15 +218,16 @@ function fromRing(options) {
   const needle = String(q).toLowerCase();
   return ring
     .filter((e) => e.seq > since && (LEVELS[e.level] ?? 0) >= min &&
-      (!needle || `${e.tag} ${e.msg} ${JSON.stringify(e.ctx || {})}`.toLowerCase().includes(needle)))
+      (!needle || `${e.tag} ${e.msg} ${e.cfg || ''} ${JSON.stringify(e.ctx || {})}`.toLowerCase().includes(needle)))
     .slice(-Math.max(1, Math.min(1000, Number(limit) || 200)));
 }
 
 export async function getLogs(options = {}) {
-  const { limit = 200, level = 'debug', since = 0, q = '' } = options;
+  const { limit = 200, level = 'debug', since = 0, q = '', global: useGlobal = false } = options;
   if (!redisAvailable()) return fromRing(options);
 
-  const data = await redisPipeline([['LRANGE', storeCfg.key, 0, RING_MAX - 1]]);
+  const key = useGlobal ? storeCfg.globalKey : storeCfg.key;
+  const data = await redisPipeline([['LRANGE', key, 0, RING_MAX - 1]]);
   const raw = data?.[0]?.result;
   if (!Array.isArray(raw) || raw.length === 0) return fromRing(options);
 
@@ -190,15 +238,16 @@ export async function getLogs(options = {}) {
     let e;
     try { e = typeof raw[i] === 'string' ? JSON.parse(raw[i]) : raw[i]; } catch (e2) { continue; }
     if (!e || (LEVELS[e.level] ?? 0) < min) continue;
-    if (needle && !`${e.tag} ${e.msg} ${JSON.stringify(e.ctx || {})}`.toLowerCase().includes(needle)) continue;
+    if (needle && !`${e.tag} ${e.msg} ${e.cfg || ''} ${JSON.stringify(e.ctx || {})}`.toLowerCase().includes(needle)) continue;
     out.push(e);
   }
   return out.slice(-Math.max(1, Math.min(1000, Number(limit) || 200)));
 }
 
-export async function clearLogs() {
+export async function clearLogs(options = {}) {
   ring.length = 0;
-  if (redisAvailable()) await redisPipeline([['DEL', storeCfg.key]]);
+  const key = options.global ? storeCfg.globalKey : storeCfg.key;
+  if (redisAvailable() && key) await redisPipeline([['DEL', key]]);
 }
 
 export function logStats() {
@@ -209,6 +258,7 @@ export function logStats() {
     consoleLevel: globalLevel,
     store: redisAvailable() ? 'upstash' : 'memory',
     scope: storeCfg?.scope || 'default',
+    globalScope: storeCfg?.globalKey ? storeCfg.globalKey.split(':').pop() : '',
   };
 }
 
