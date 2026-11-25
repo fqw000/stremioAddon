@@ -46,6 +46,8 @@
         enableImdb: $('enableImdb'),
         enableStream: $('enableStream'),
         enableBanIp: $('enableBanIp'),
+        dbg: $('dbg'),
+        logsBtn: $('logsBtn'),
         toggleTmdbKey: $('toggleTmdbKey'),
 
         jpyySection: $('jpyySection'),
@@ -166,6 +168,9 @@
                 config.c555 = [];
             }
         }
+
+        // ===== 调试模式 =====
+        if (el.dbg && el.dbg.checked) config.dbg = true;
 
         return config;
     }
@@ -369,6 +374,12 @@
     el.copyBtn.addEventListener('click', copyUrl);
     el.webInstallBtn.addEventListener('click', webInstall);
     el.toggleTmdbKey.addEventListener('click', toggleTmdbKey);
+    if (el.logsBtn) el.logsBtn.addEventListener('click', () => {
+        const config = collectConfig();
+        const base = getBaseUrl();
+        const qs = Object.keys(config).length ? '?format=html&cfg=' + encodeConfig(config) : '?format=html';
+        window.open(base + '/api/logs' + qs, '_blank');
+    });
 
     // ===== 源开关变化：联动 + 更新结果 =====
     document.querySelectorAll('.source-cb').forEach(cb => {

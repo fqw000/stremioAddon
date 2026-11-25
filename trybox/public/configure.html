@@ -118,7 +118,7 @@
         </div>
       </section>
 
-      <!-- TMDB Key -->
+      <!-- 高级选项 -->
       <section class="group">
         <h2 class="group-title">高级选项</h2>
         <div class="card">
@@ -128,6 +128,32 @@
               <span class="setting-desc">可选，用于 tt ID 转换，留空使用服务端内置</span>
             </div>
             <input type="text" id="tk" class="input" placeholder="留空使用默认">
+          </div>
+          <div class="divider"></div>
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">调试模式（debug）</span>
+              <span class="setting-desc">仅排查故障时临时开启：写入完整运行日志，可在下方日志页实时查看。关闭后只记录常规信息，写入量极小。</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dbg">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 运行日志 -->
+      <section class="group">
+        <h2 class="group-title">运行日志</h2>
+        <p class="group-desc">勾选 debug 并安装后，点播放即可在此实时查看完整链路日志（按当前配置隔离）</p>
+        <div class="card">
+          <div class="setting">
+            <div class="setting-info">
+              <span class="setting-label">实时日志页</span>
+              <span class="setting-desc">自动刷新、可按级别/关键词过滤、支持清空当前配置的日志</span>
+            </div>
+            <button class="btn-copy" id="logsBtn">查看运行日志 →</button>
           </div>
         </div>
       </section>

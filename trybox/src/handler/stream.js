@@ -81,8 +81,11 @@ function buildPendingKey(cacheKey) {
 /**
  * 失败统一处理
  *
- * - pending 未命中：写 pending 120s，返回诊断（不锁死）
- * - pending 命中：写负缓存 negTtl 秒 + 清 pending，返回诊断
+ * - pending 未命中：写 pending 120s，返回空流（不锁死）
+ * - pending 命中：写负缓存 negTtl 秒 + 清 pending，返回空流
+ *
+ * 诊断信息不再通过 stream url 返回（见日志系统规范），改为写日志：
+ * 常态 info 级记录原因，配置页 debug 打开时可看完整链路。
  */
 async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl, rawId) {
   const pendingKey = buildPendingKey(cacheKey);
@@ -91,20 +94,21 @@ async function failWithPending(env, cacheKey, negKey, reason, detail, negTtl, ra
   if (pending) {
     await setCache(env, negKey, { detail, reason }, { redisTtl: negTtl });
     await delCache(env, pendingKey);
-    log.info(`二次确认失败(${reason})，写入负缓存: ${negKey} ttl=${negTtl}s`);
+    log.info(`二次确认失败(${reason})，写入负缓存: ${negKey} ttl=${negTtl}s，rawId=${rawId}`);
   } else {
     await setCache(env, pendingKey, { ts: Date.now(), reason }, { redisTtl: 120 });
-    log.info(`首次失败(${reason})，写入 pending: ${pendingKey}`);
+    log.info(`首次失败(${reason})，写入 pending: ${pendingKey}，rawId=${rawId}`);
   }
+  log.debug(`[诊断] reason=${reason} detail=${detail} rawId=${rawId}`);
 
-  return { streams: [buildDiagnostic(reason, detail, rawId)] };
+  return { streams: [] };
 }
 
 export async function streamHandler({ type, id, config, env }) {
   const parsed = await parseAnyId(env, id, type, config.tmdbKey);
   if (!parsed) {
     log.warn(`无法解析 id: ${id}`);
-    return { streams: [buildDiagnostic('invalid_id', `无法解析 id: ${id}`, id)] };
+    return { streams: [] };
   }
 
   const { tmdbId, kind, season, episode } = parsed;
@@ -131,10 +135,8 @@ export async function streamHandler({ type, id, config, env }) {
   const neg = await getCache(env, negKey);
   if (neg) {
     const reason = neg.reason || 'cached_no_url';
-    log.info(`Stream 命中负面缓存: ${negKey} (${reason})`);
-    return {
-      streams: [buildDiagnostic(`cached:${reason}`, neg.detail || '近期无可用链接', baseId)],
-    };
+    log.info(`Stream 命中负面缓存: ${negKey} (${reason})，rawId=${baseId}`);
+    return { streams: [] };
   }
   
   // ─── 3. 获取 access_token ───
@@ -148,11 +150,12 @@ export async function streamHandler({ type, id, config, env }) {
     );
   } catch (e) {
     log.error('获取 access_token 失败:', e.message);
-    return { streams: [buildDiagnostic('token_failed', e.message, baseId)] };
+    return { streams: [] };
   }
 
   if (!accessToken) {
-    return { streams: [buildDiagnostic('no_token', 'access_token 为空', baseId)] };
+    log.error('access_token 为空，rawId=' + baseId);
+    return { streams: [] };
   }
 
   const headers = buildStreamHeaders(accessToken, lang);
@@ -232,11 +235,4 @@ export async function streamHandler({ type, id, config, env }) {
   log.info(`写入缓存: ${cacheKey}（${streams.length} 条）`);
 
   return { streams };
-}
-
-function buildDiagnostic(reason, detail, rawId) {
-  return {
-    name: '诊断 · ' + (rawId || '未知'),
-    url: `trybox|${reason}|${detail}`,
-  };
 }

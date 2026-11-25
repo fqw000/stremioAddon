@@ -32,6 +32,9 @@ export function mergeConfig(user = {}, env = {}) {
 
     // 剔除 IP 绑定 URL：布尔类，用户显式 false 优先，否则默认 true
     removeIdValidation: user.removeIdValidation !== false,
+
+    // 调试模式：开启后该请求的 debug 级日志写入服务器，可在 /api/logs 实时查看
+    debug: user.dbg === true || false,
   };
 }
 

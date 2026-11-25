@@ -598,14 +598,14 @@ async function testStream() {
       severity: 'critical',
       validate: (d) => {
         if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-        if (!d.streams.length) return { valid: false, reason: 'streams 为空' };
+        // 诊断流已移除（见日志系统规范）：空数组 = 上游无有效链接 / 命中负缓存，属正常状态
+        if (!d.streams.length) return { valid: true, summary: `⚠️ 无流（上游无有效链接或未收录，详见日志页）` };
 
-        // 诊断 stream 处理
-        const debugStreams = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
-        if (debugStreams.length === d.streams.length) {
-          const url = debugStreams[0].url;
+        const legacyDebug = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
+        if (legacyDebug.length === d.streams.length) {
+          const url = legacyDebug[0].url;
           if (url.includes('no_valid_url') || url.includes('cached_no_url')) {
-            return { valid: true, summary: `⚠️ 上游无有效链接（可能未收录）` };
+            return { valid: true, summary: `⚠️ 上游无有效链接（旧版诊断流）` };
           }
           return { valid: false, reason: `诊断失败: ${url.slice(0, 80)}` };
         }
@@ -648,13 +648,13 @@ async function testStream() {
       severity: 'major',
       validate: (d) => {
         if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-        if (!d.streams.length) return { valid: false, reason: 'streams 为空' };
+        if (!d.streams.length) return { valid: true, summary: `⚠️ 无流（上游无有效链接，详见日志页）` };
 
-        const debugStreams = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
-        if (debugStreams.length === d.streams.length) {
-          const url = debugStreams[0].url;
+        const legacyDebug = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
+        if (legacyDebug.length === d.streams.length) {
+          const url = legacyDebug[0].url;
           if (url.includes('no_valid_url') || url.includes('cached_no_url')) {
-            return { valid: true, summary: `⚠️ 上游无有效链接` };
+            return { valid: true, summary: `⚠️ 上游无有效链接（旧版诊断流）` };
           }
           return { valid: false, reason: `诊断失败: ${url.slice(0, 80)}` };
         }
@@ -708,9 +708,8 @@ async function testStream() {
     path: '/stream/movie/tt0109830.json',
     severity: 'major',
     validate: async (d) => {
-      if (!Array.isArray(d.streams) || !d.streams.length) {
-        return { valid: false, reason: 'tt 格式返回空' };
-      }
+      if (!Array.isArray(d.streams)) return { valid: false, reason: 'tt 格式 streams 非数组' };
+      if (!d.streams.length) return { valid: true, summary: '⚠️ tt 格式无流（上游无链接或未收录，详见日志页）' };
       const ttUrl = d.streams.find((s) => s.url?.startsWith('http'))?.url;
       if (!ttUrl) return { valid: true, summary: 'tt 无有效 URL（上游问题）' };
 
@@ -793,7 +792,7 @@ async function testStream() {
     },
   });
 
-  // 第 3 次：应命中负缓存，返回 trybox|cached_no_url
+  // 第 3 次：应命中负缓存（诊断流已移除，改为「空数组 + 未回源耗时」判断）
   {
     stats.total++;
     const t0 = Date.now();
@@ -801,12 +800,13 @@ async function testStream() {
       const resp = await request(`/stream/movie/${negId}.json`);
       const elapsed = Date.now() - t0;
       const data = JSON.parse(resp.text);
-      const isCachedNeg = data.streams?.some((s) => s.url?.startsWith('trybox|cached:'));
-      if (!isCachedNeg) {
-        warn(`[stream-edge] 第 3 次未命中负缓存（${elapsed}ms）`);
+      const isEmpty = Array.isArray(data.streams) && data.streams.length === 0;
+      const legacyCached = data.streams?.some((s) => s.url?.startsWith('trybox|cached:'));
+      const hit = isEmpty || legacyCached;
+      if (!hit) {
+        warn(`[stream-edge] 第 3 次未命中负缓存（${elapsed}ms，返回 ${data.streams?.length} 条）`);
         stats.warnings.push(`负缓存未命中: ${elapsed}ms`);
       } else if (elapsed > 1500) {
-        // 命中但慢：这是 L2 延迟问题，不是负缓存问题
         warn(`[stream-edge] 负缓存命中但 L2 延迟高（${elapsed}ms）`);
         stats.warnings.push(`负缓存命中慢: ${elapsed}ms`);
       } else {
@@ -815,7 +815,7 @@ async function testStream() {
       }
       stats.results.push({
         category: 'stream-edge', name: '负面缓存 · 第 3 次（应命中）',
-        ok: true, elapsed, summary: isCachedNeg ? `cached:${elapsed}ms` : 'MISS',
+        ok: true, elapsed, summary: hit ? `cached:${elapsed}ms` : 'MISS',
       });
     } catch (e) {
       fail(`[stream-edge] 第 3 次失败: ${e.message}`);
@@ -833,7 +833,7 @@ async function testStream() {
     severity: 'major',
     validate: (d) => {
       if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-      if (!d.streams.length) return { valid: false, reason: 'streams 为空' };
+      if (!d.streams.length) return { valid: true, summary: '⚠️ 无流（上游无链接，详见日志页）' };
       const realStreams = d.streams.filter((s) => s.url && s.url.startsWith('http'));
       if (!realStreams.length) return { valid: true, summary: '无有效 URL（上游问题）' };
 
@@ -913,12 +913,12 @@ async function testTtId() {
       name: 'Stream · movie · tt0109830', path: '/stream/movie/tt0109830.json',
       validate: (d) => {
         if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-        if (!d.streams.length) return { valid: false, reason: 'streams 为空' };
-        const debugStreams = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
-        if (debugStreams.length === d.streams.length) {
-          const url = debugStreams[0].url;
+        if (!d.streams.length) return { valid: true, summary: `⚠️ 无流（上游无有效链接，详见日志页）` };
+        const legacyDebug = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
+        if (legacyDebug.length === d.streams.length) {
+          const url = legacyDebug[0].url;
           if (url.includes('no_valid_url') || url.includes('cached_no_url')) {
-            return { valid: true, summary: `⚠️ 上游无有效链接` };
+            return { valid: true, summary: `⚠️ 上游无有效链接（旧版诊断流）` };
           }
           return { valid: false, reason: `诊断失败: ${url.slice(0, 80)}` };
         }
@@ -939,12 +939,12 @@ async function testTtId() {
       name: 'Stream · series · tt7660850:1:1', path: '/stream/series/tt7660850:1:1.json',
       validate: (d) => {
         if (!Array.isArray(d.streams)) return { valid: false, reason: 'streams 非数组' };
-        if (!d.streams.length) return { valid: false, reason: 'streams 为空' };
-        const debugStreams = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
-        if (debugStreams.length === d.streams.length) {
-          const url = debugStreams[0].url;
+        if (!d.streams.length) return { valid: true, summary: `⚠️ 无流（上游无有效链接，详见日志页）` };
+        const legacyDebug = d.streams.filter((s) => s.url && s.url.startsWith('trybox|'));
+        if (legacyDebug.length === d.streams.length) {
+          const url = legacyDebug[0].url;
           if (url.includes('no_valid_url') || url.includes('cached_no_url')) {
-            return { valid: true, summary: `⚠️ 上游无有效链接` };
+            return { valid: true, summary: `⚠️ 上游无有效链接（旧版诊断流）` };
           }
           return { valid: false, reason: `诊断失败: ${url.slice(0, 80)}` };
         }

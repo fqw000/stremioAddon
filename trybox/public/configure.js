@@ -77,6 +77,9 @@ function collectConfig() {
   const tk = document.getElementById('tk').value.trim();
   if (tk) cfg.tk = tk;
 
+  // debug 开关（仅开启时写入，减小 URL 长度）
+  if (document.getElementById('dbg').checked) cfg.dbg = true;
+
   return cfg;
 }
 
@@ -144,6 +147,16 @@ function bindEvents() {
     // 去掉 https:// 前缀，用 stremio:// 协议
     const stremioUrl = 'stremio://' + url.replace(/^https?:\/\//, '');
     window.location.href = stremioUrl;
+  });
+
+  // 查看运行日志：带上当前 cfg，确保 scope 与安装地址一致
+  document.getElementById('logsBtn').addEventListener('click', () => {
+    const cfg = collectConfig();
+    const baseUrl = window.location.origin;
+    const url = Object.keys(cfg).length
+      ? `${baseUrl}/api/logs?format=html&cfg=${base64urlEncode(JSON.stringify(cfg))}`
+      : `${baseUrl}/api/logs?format=html`;
+    window.open(url, '_blank');
   });
 }
 

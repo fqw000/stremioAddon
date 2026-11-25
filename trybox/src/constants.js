@@ -13,7 +13,7 @@ export const TRYBOX_URLS = {
 
 /** Supabase 配置（token 刷新用） */
 export const TMDB_API = {
-  base: 'https://api.themoviedb.org/3',
+  base: 'https://tmdb.demojameson.de5.net/3',
   defaultKey: '',  // 由 env.TMDB_KEY 或用户配置提供
 };
 
