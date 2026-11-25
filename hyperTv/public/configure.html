@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HypeTv Addon 配置</title>
+<style>
+  :root{color-scheme:light;--bg:#f6f7f9;--card:#fff;--line:#e5e7eb;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--warn:#b45309}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:720px;margin:40px auto;padding:0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;box-shadow:0 4px 16px rgba(15,23,42,.05)}
+  h1{margin:0 0 6px;font-size:26px}h2{font-size:17px;margin:26px 0 12px}
+  p{margin:8px 0}.muted,.hint{color:var(--muted);font-size:13px}
+  .warn{border-left:3px solid var(--warn);background:#fffbeb;padding:10px 14px;border-radius:6px;color:#78350f;font-size:13px;margin:12px 0}
+  .opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;cursor:pointer}
+  .opt:has(input:checked){border-color:var(--accent);background:#eff6ff}
+  .opt input{margin-top:5px}
+  label.field{display:block;margin:12px 0}label.field span{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  input[type=text],input[type=password],select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:var(--text)}
+  .row{display:flex;gap:18px;flex-wrap:wrap}.row>label{flex:1;min-width:160px}
+  .checks{display:flex;gap:18px;flex-wrap:wrap}.checks label{display:flex;gap:6px;align-items:center}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer}
+  button.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+  .out{margin-top:20px;display:none}.out.show{display:block}
+  .url{word-break:break-all;background:#f3f4f6;border-radius:8px;padding:12px;font-size:13px;margin:10px 0}
+  a.install{display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card">
+  <h1>HypeTv Stremio Addon</h1>
+  <p class="muted">选择数据来源与目录，生成 Stremio 安装链接。配置以 <code>?cfg=</code> 写入插件地址，不上传服务器。</p>
+
+  <form id="form">
+    <h2>1. 数据来源</h2>
+    <label class="opt"><input type="radio" name="sourceType" value="hypetv" checked>
+      <span><strong>HypeTv 内置列表</strong><br><span class="hint">站点公开片库；电影约 4.4 万部、剧集约 9500 部</span></span></label>
+    <div id="builtinBox">
+      <label class="field"><span>内置列表</span><select id="listId"><option value="1">Minha lista</option><option value="2">Lista-2</option></select></label>
+      <div class="warn">实测：内置列表的直播流返回 403（站点声明仅部分账号开放），因此直播目录默认关闭；电影与剧集可用。</div>
+    </div>
+
+    <label class="opt"><input type="radio" name="sourceType" value="xtream">
+      <span><strong>自有 Xtream 账号</strong><br><span class="hint">完整支持直播 / 电影 / 剧集，推荐用于 IPTV 订阅</span></span></label>
+    <div id="xtreamBox" hidden>
+      <label class="field"><span>Server（含 http:// 或 https://）</span><input type="text" id="server" placeholder="http://your-server:8080"></label>
+      <div class="row">
+        <label class="field"><span>Username</span><input type="text" id="username"></label>
+        <label class="field"><span>Password</span><input type="password" id="password"></label>
+      </div>
+    </div>
+
+    <label class="opt"><input type="radio" name="sourceType" value="m3u">
+      <span><strong>M3U 播放列表 URL</strong><br><span class="hint">经 HypeTv /api/fetch 代理抓取，按频道目录呈现</span></span></label>
+    <div id="m3uBox" hidden>
+      <label class="field"><span>M3U 地址</span><input type="text" id="m3uUrl" placeholder="https://.../list.m3u"></label>
+    </div>
+
+    <h2>2. 元数据（可选）</h2>
+    <p class="hint">站点自身接口固定葡语、不支持语言参数；中文标题/简介/海报由 TMDB <code>language=zh-CN</code> 提供。默认已配置可用 Key 与 <code>api.tmdb.org/3</code>，留空即使用默认值；也可填自己的 Key 或免密代理，中文封面会随语言切换。</p>
+    <div class="row">
+      <label class="field"><span>TMDB API Key（有 Key 时填写）</span><input type="password" id="tmdbKey" placeholder="留空使用服务端环境变量"></label>
+      <label class="field"><span>TMDB 代理地址（可自定义）</span><input type="text" id="tmdbProxy" placeholder="https://api.tmdb.org/3"></label>
+    </div>
+    <p class="hint">代理地址填到接口根路径即可，例如 <code>https://你的域名/3</code> 或自带参数的 <code>https://你的域名/api?token=xxx</code>；插件会正确拼接 <code>find/tt…</code>、<code>search/movie</code> 等路径，并保留代理原有查询参数。官方域名会自动补 <code>/3</code>。</p>
+    <label><input type="checkbox" id="tmdbKeyless"> 免密模式（代理端已内置 Key，请求不传 api_key；自定义代理通常勾选此项）</label>
+    <label class="field"><span>元数据语言</span><select id="language">
+      <option value="zh-CN">中文（zh-CN）</option>
+      <option value="pt-BR">葡语（pt-BR）</option>
+      <option value="original">原语言（en-US）</option>
+    </select></label>
+    <label><input type="checkbox" id="enrichCatalog" checked> 目录页补充中文标题（需 TMDB 可用，有限条数与超时保护）</label>
+    <label class="field"><span>字幕语言</span><select id="subtitleLang">
+      <option value="both">中文 + 英文（推荐）</option>
+      <option value="zh">仅中文</option>
+      <option value="en">仅英文</option>
+    </select></label>
+    <label><input type="checkbox" id="subtitleProxy" checked> 字幕走插件代理（推荐，规避 nuvio 等客户端的 403）</label>
+    <label><input type="checkbox" id="debug"> 开发调试模式（debug）<span class="hint">开启后，匹配失败等场景会返回「诊断信息」流，内含可一键复制的诊断链接；关闭时诊断流返回空；同时终端会输出完整请求链路日志。</span></label>
+    <label class="field"><span>运行日志级别</span><select id="logLevel">
+      <option value="info">INFO（默认：每次请求 + 结果条数）</option>
+      <option value="debug">DEBUG（完整链路：字幕请求、ID 解析、上游结果、TMDB 匹配）</option>
+      <option value="warn">WARN（仅告警与错误）</option>
+      <option value="error">ERROR（仅错误）</option>
+    </select></label>
+    <p class="hint">服务端也可用环境变量 <code>LOG_LEVEL=debug node server.js</code> 全局开启。运行时在浏览器打开 <a href="/api/logs?format=html">/api/logs?format=html</a> 可实时查看最近 600 条日志（含字幕是否被执行），支持过滤、搜索与清空；接口形式 <code>/api/logs?q=subtitle</code>。</p>
+
+    <h2>3. 目录与播放</h2>
+    <div class="checks">
+      <label><input type="checkbox" id="live"> 直播</label>
+      <label><input type="checkbox" id="vod" checked> 电影</label>
+      <label><input type="checkbox" id="series" checked> 剧集</label>
+      <label><input type="checkbox" id="useProxy" checked> 经 HypeTv 代理播放</label>
+    </div>
+    <p class="hint">代理可解决 HTTPS / CORS 与部分源站的 Referer 要求；MP4 直连速度更快。</p>
+
+    <p style="margin-top:24px"><button type="submit">生成安装链接</button></p>
+  </form>
+
+  <div class="out" id="out">
+    <h2>安装</h2>
+    <a class="install" id="install" href="#">在 Stremio 中安装</a>
+    <div class="url" id="urlText"></div>
+    <button class="secondary" id="copy">复制链接</button>
+    <p class="hint" style="margin-top:14px"><a href="/api/logs?format=html">打开运行日志 →</a> 安装后在客户端点播放，回到此页即可看到字幕请求是否进来、IMDb ID 是否解析成功、上游返回多少条。</p>
+  </div>
+</div></div>
+
+<script>
+const HYPE = 'https://hypetv.mihawkdev.com';
+const $ = (id) => document.getElementById(id);
+
+function enc(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let bin = ''; for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function dec(s) {
+  try {
+    let t = String(s || '').replace(/-/g, '+').replace(/_/g, '/');
+    t += '='.repeat((4 - (t.length % 4)) % 4);
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(t), (c) => c.charCodeAt(0))));
+  } catch { return null; }
+}
+function sourceType() { return document.querySelector('input[name=sourceType]:checked').value; }
+function syncBoxes() {
+  const t = sourceType();
+  $('builtinBox').hidden = t !== 'hypetv';
+  $('xtreamBox').hidden = t !== 'xtream';
+  $('m3uBox').hidden = t !== 'm3u';
+}
+document.querySelectorAll('input[name=sourceType]').forEach((el) => el.addEventListener('change', () => {
+  syncBoxes();
+  $('live').checked = sourceType() === 'hypetv' ? false : true;
+}));
+
+fetch(HYPE + '/api/lists').then((r) => r.json()).then((lists) => {
+  if (!Array.isArray(lists) || !lists.length) return;
+  $('listId').innerHTML = lists.map((x) => `<option value="${String(x.id).replace(/"/g, '')}">${String(x.name || x.id).replace(/</g, '&lt;')}</option>`).join('');
+}).catch(() => {});
+
+$('tmdbProxy').value = 'https://api.tmdb.org/3';
+
+const prefill = dec(new URLSearchParams(location.search).get('cfg'));
+if (prefill && prefill.source) {
+  const t = prefill.source.type;
+  const radio = document.querySelector(`input[name=sourceType][value=${t}]`);
+  if (radio) radio.checked = true;
+  if (t === 'hypetv' && prefill.source.listId) $('listId').value = prefill.source.listId;
+  if (t === 'xtream') { $('server').value = prefill.source.server || ''; $('username').value = prefill.source.username || ''; $('password').value = prefill.source.password || ''; }
+  if (t === 'm3u') $('m3uUrl').value = prefill.source.url || '';
+  $('live').checked = !!prefill.catalogs?.live;
+  $('vod').checked = !!prefill.catalogs?.vod;
+  $('series').checked = !!prefill.catalogs?.series;
+  $('useProxy').checked = prefill.useProxy !== false;
+  $('tmdbKey').value = prefill.tmdbApiKey || '';
+  $('tmdbProxy').value = prefill.tmdbProxy || 'https://api.tmdb.org/3';
+  $('tmdbKeyless').checked = !!prefill.tmdbKeyless;
+  $('language').value = prefill.language || 'zh-CN';
+  $('enrichCatalog').checked = prefill.enrichCatalog !== false;
+  $('subtitleLang').value = prefill.subtitleLang || 'both';
+  $('subtitleProxy').checked = prefill.subtitleProxy !== false;
+  $('debug').checked = !!prefill.debug;
+  $('logLevel').value = prefill.logLevel || 'info';
+}
+syncBoxes();
+
+$('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const t = sourceType();
+  let source;
+  if (t === 'hypetv') source = { type: 'hypetv', listId: $('listId').value || '1' };
+  else if (t === 'xtream') {
+    if (!$('server').value.trim()) { alert('请填写 Xtream Server'); return; }
+    source = { type: 'xtream', server: $('server').value.trim().replace(/\/+$/, ''), username: $('username').value, password: $('password').value };
+  } else {
+    if (!$('m3uUrl').value.trim()) { alert('请填写 M3U 地址'); return; }
+    source = { type: 'm3u', url: $('m3uUrl').value.trim() };
+  }
+  const cfg = {
+    source,
+    catalogs: { live: $('live').checked, vod: $('vod').checked, series: $('series').checked },
+    useProxy: $('useProxy').checked,
+    tmdbApiKey: $('tmdbKey').value.trim(),
+    tmdbProxy: $('tmdbProxy').value.trim() || 'https://api.tmdb.org/3',
+    tmdbKeyless: $('tmdbKeyless').checked,
+    language: $('language').value,
+    enrichCatalog: $('enrichCatalog').checked,
+    subtitleLang: $('subtitleLang').value,
+    subtitleProxy: $('subtitleProxy').checked,
+    debug: $('debug').checked,
+    logLevel: $('logLevel').value,
+  };
+  const manifestUrl = `${location.origin}/manifest.json?cfg=${enc(cfg)}`;
+  $('install').href = 'stremio://' + manifestUrl.replace(/^https?:\/\//, '');
+  $('urlText').textContent = manifestUrl;
+  $('install').dataset.url = manifestUrl;
+  $('out').classList.add('show');
+});
+$('copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('urlText').textContent);
+  $('copy').textContent = '已复制';
+  setTimeout(() => { $('copy').textContent = '复制链接'; }, 1500);
+});
+</script>
+</body>
+</html>

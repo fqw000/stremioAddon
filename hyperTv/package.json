@@ -1,0 +1,16 @@
+{
+  "name": "hypetv-stremio-addon",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stremio addon backed by HypeTv / Xtream / M3U sources",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "health": "node health.js",
+    "deploy": "vercel --prod"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
