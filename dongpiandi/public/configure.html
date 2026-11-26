@@ -244,11 +244,26 @@
       </details>
     </section>
 
+    <!-- 运行日志（默认隐藏，连点底部访客图标 4 次显示） -->
+    <section class="group" id="logsSection" style="display:none">
+      <h2 class="group-title">运行日志</h2>
+      <p class="group-desc">调试入口：带 cfg 只看当前配置；不带 cfg 在页面顶部切换所有用户 / debug 用户视图</p>
+      <div class="card">
+        <div class="setting">
+          <div class="setting-info">
+            <span class="setting-label">实时日志页</span>
+            <span class="setting-desc">自动刷新、可暂停、按级别/关键词过滤；时间为北京时间（UTC+8）</span>
+          </div>
+          <button type="button" id="logsBtn">查看日志 ↗</button>
+        </div>
+      </div>
+    </section>
+
     <footer>
       <p>MIT License · Made with ❤️ for Stremio Community</p>
 
          <p >  wangqifei.eu.org </p>
-      <p><img src="https://visitor-badge.laobi.icu/badge?page_id=dongpiandiStremioAddon;left_text=Visitors" alt="Visitors"></p>
+      <p><img id="visitorBadge" src="https://visitor-badge.laobi.icu/badge?page_id=dongpiandiStremioAddon;left_text=Visitors" alt="Visitors" title="访客统计"></p>
     </footer>
   </div>
 

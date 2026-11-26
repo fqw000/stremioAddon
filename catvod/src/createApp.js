@@ -10,7 +10,11 @@ import { handleStream } from "./addon/stream.js";
 import { registerHlsRoutes } from "./routes/hls.js";
 import { registerDebugRoutes } from "./routes/debug.js";
 import { traceMiddleware } from "./utils/traceId.js";
-import { log } from "./logger.js";
+import {
+  log, createLogger, initLogStore, scopeFromCfg, safeCfgTag,
+  getLogs, clearLogs, logStats, flushLogWrites, runWithLogStore,
+} from "./logger.js";
+import { logsHtml } from "./logPage.js";
 
 const registryCache = new Map();
 const MAX_REGISTRY_CACHE = 30;
@@ -70,11 +74,79 @@ export function createApp() {
   app.set("trust proxy", true);
 
   app.use(traceMiddleware);
+
+  // 运行日志：按请求隔离 store（Node 长驻进程并发安全），并注册日志路由
   app.use((req, res, next) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Headers", "*");
-    req.userConfig = parseCfg(req);
-    next();
+    runWithLogStore(() => {
+      const cfgParam = typeof req.query.cfg === "string" ? req.query.cfg : "";
+      const scopeParam = typeof req.query.scope === "string" ? req.query.scope : "";
+      const pathname = req.path;
+      const logRoute = pathname === "/api/logs" || pathname === "/api/logs.html";
+      const viewParam = String(req.query.view || "");
+      const view = ["all", "debug", "personal"].includes(viewParam)
+        ? viewParam
+        : (cfgParam || scopeParam ? "personal" : "all");
+
+      req.userConfig = parseCfg(req);
+      let cfgDebug = false;
+      let cfgUid = "";
+      try {
+        cfgDebug = req.userConfig.dbg === true || req.userConfig.debug === true;
+        cfgUid = String(req.userConfig.uid || "");
+      } catch (e) {}
+      const scope = scopeParam || scopeFromCfg(cfgParam);
+      initLogStore(process.env, {
+        prefix: process.env.APP_PREFIX || "catvod",
+        scope, debugUser: cfgDebug, cfgTag: safeCfgTag(cfgParam), uid: cfgUid,
+      });
+
+      // 日志路由自身不写访问日志，避免每 3 秒轮询刷屏
+      if (!logRoute) {
+        const label = pathname === "/manifest.json" || pathname === "/" ? "资源声明"
+          : pathname.startsWith("/catalog/") ? "目录"
+          : pathname.startsWith("/meta/") ? "详情"
+          : pathname.startsWith("/stream/") ? "播放源"
+          : pathname.startsWith("/debug/") ? "健康检查" : "请求";
+        const L = createLogger("Edge", { reqId: String(req.headers["x-trace-id"] || "").slice(0, 6) });
+        L.section(`${label} · ${req.method} ${pathname}`, {
+          path: pathname, method: req.method, params: req.originalUrl.slice(pathname.length).slice(0, 160),
+          config: `scope=${scope} debug=${cfgDebug}`,
+        });
+        L.info(`${req.method} ${req.originalUrl.slice(0, 160)} scope=${scope} debug=${cfgDebug}`);
+      }
+
+      if (logRoute) {
+        (async () => {
+          try {
+            if (req.query.clear === "1") {
+              await clearLogs({ view });
+              return res.json({ ok: true, cleared: true, view, ...logStats() });
+            }
+            if (req.query.format === "html") {
+              res.set("Content-Type", "text/html; charset=utf-8");
+              res.set("Cache-Control", "no-store");
+              return res.send(logsHtml(scope, view));
+            }
+            const level = String(req.query.level || "debug");
+            const limit = Number(req.query.limit) || 200;
+            const q = String(req.query.q || "");
+            const logs = await getLogs({ level, limit, q, view });
+            res.set("Cache-Control", "no-store");
+            res.json({ ok: true, view, ...logStats(), logs });
+          } catch (e) {
+            res.status(500).json({ error: e.message });
+          } finally {
+            await flushLogWrites();
+          }
+        })();
+        return;
+      }
+      // Node 长驻进程不冻结实例，但仍在响应结束时统一刷写，便于日志落盘
+      res.on("finish", () => { flushLogWrites().catch(() => {}); });
+      next();
+    });
   });
 
   // ==========================================

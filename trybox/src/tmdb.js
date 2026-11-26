@@ -10,6 +10,7 @@
  */
 
 import { createLogger } from './logger.js';
+import { loggedFetch } from './http-log.js';
 import { TMDB_API, TTL } from './constants.js';
 import { withCache } from './cache.js';
 
@@ -39,7 +40,7 @@ export function imdbNumericPart(id) {
  */
 async function fetchTmdbFind(ttId, tmdbKey) {
   const url = `${TMDB_API.base}/find/${ttId}?external_source=imdb_id&language=zh-CN&api_key=${tmdbKey}`;
-  const res = await fetch(url);
+  const res = await loggedFetch(url, {}, { tag: 'tmdb', label: 'TMDB find' });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`TMDB find HTTP ${res.status}: ${text.slice(0, 200)}`);

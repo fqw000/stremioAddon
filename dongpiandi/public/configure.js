@@ -140,7 +140,24 @@
         if (!el.enableStream.checked) config.stream = false;
         if (el.enableDebug.checked) config.debug = true;
 
+        // 用户标识 uid：所有安装链接都带，全量日志汇总靠它区分不同用户
+        config.uid = getOrCreateDebugUid();
+
         return config;
+    }
+
+    // 用户标识：8 位随机值，localStorage 持久化；所有安装链接都带，用于日志汇总区分用户
+    function getOrCreateDebugUid() {
+        try {
+            let uid = localStorage.getItem('dongpiandi_dbg_uid');
+            if (!uid) {
+                uid = Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('dongpiandi_dbg_uid', uid);
+            }
+            return uid;
+        } catch (e) {
+            return Math.random().toString(36).slice(2, 10);
+        }
     }
 
     function buildUrls(config) {
@@ -366,5 +383,34 @@
 
         // ?autogen=1 自动生成
         if (params.has('autogen')) generate();
+
+        // 查看运行日志：带 cfg 只看当前配置，不带 cfg 显示全局视图
+        const logsBtn = document.getElementById('logsBtn');
+        if (logsBtn) logsBtn.addEventListener('click', () => {
+            const config = collectConfig();
+            const base = window.location.origin;
+            const url = Object.keys(config).length
+                ? `${base}/api/logs?format=html&cfg=${encodeConfig(config)}`
+                : `${base}/api/logs?format=html`;
+            window.open(url, '_blank');
+        });
+
+        // 调试入口默认隐藏：连点底部访客统计图标 4 次（5 秒内）显示
+        const badge = document.getElementById('visitorBadge');
+        const logsSection = document.getElementById('logsSection');
+        if (badge && logsSection) {
+            let clicks = 0, timer = null;
+            badge.style.cursor = 'pointer';
+            badge.addEventListener('click', () => {
+                clicks += 1;
+                clearTimeout(timer);
+                timer = setTimeout(() => { clicks = 0; }, 5000);
+                if (clicks >= 4) {
+                    logsSection.style.display = '';
+                    clearTimeout(timer);
+                    clicks = 0;
+                }
+            });
+        }
     });
 })();

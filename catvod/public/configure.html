@@ -71,11 +71,18 @@
       </section>
     </main>
 
+    <section id="logsSection" style="display:none">
+      <h2>运行日志</h2>
+      <p>调试入口：带 cfg 只看当前配置；不带 cfg 在页面顶部切换所有用户 / debug 用户视图</p>
+      <label><input type="checkbox" id="dbg"> 启用 debug（写入详细日志，仅排查时用）</label>
+      <button type="button" id="logsBtn">查看日志 ↗</button>
+    </section>
+
     <footer class="footer">
       <button id="installBtn" class="btn-install">安装到 Stremio</button>
       <p class="footer-hint">Made with ❤️ for Stremio Community</p>
       <p class="footer-hint">  wangqifei.eu.org </p>
-      <p class="footer-hint"><img src="https://visitor-badge.laobi.icu/badge?page_id=CatvodAddon;left_text=Visitors" alt="Visitors"></p>
+      <p class="footer-hint"><img id="visitorBadge" src="https://visitor-badge.laobi.icu/badge?page_id=CatvodAddon;left_text=Visitors" alt="Visitors" title="访客统计"></p>
     </footer>
   </div>
   <script src="/configure.js"></script>

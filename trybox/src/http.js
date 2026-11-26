@@ -14,6 +14,7 @@
  */
 
 import { createLogger } from './logger.js';
+import { loggedFetch } from './http-log.js';
 
 const log = createLogger('HTTP');
 const REQUEST_TIMEOUT = 15000;
@@ -29,7 +30,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT) 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    // 统一底层请求日志：URL(脱敏)/method/status/type/字节/耗时，debug 级，仅排查时写
+    return await loggedFetch(url, { ...options, signal: controller.signal }, { tag: 'fetch' });
   } finally {
     clearTimeout(timer);
   }
@@ -39,12 +41,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT) 
  * GET 请求，返回 text
  */
 export async function getText(url, headers = {}, options = {}) {
-  log.info('==================== 底层接口请求 ==================');
-  log.info('【 请求路径 】', url);
-  log.info('【  请求头  】', headers);
-  log.info('【 请求选项 】', options);
-  log.info('==================================================');
-
   const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {
@@ -73,11 +69,6 @@ export async function getText(url, headers = {}, options = {}) {
  * POST 请求（JSON body），返回 text
  */
 export async function postText(url, body, headers = {}, options = {}) {
-  log.info('==================== Stream 底层接口请求 ==================');
-  log.info('【 请求路径 】', url);
-  log.info('【  请求头  】', headers);
-  log.info('【 请求选项 】', options);
-  log.info('==================================================');
   const { retryCount = RETRY_COUNT, timeoutMs = REQUEST_TIMEOUT } = normalizeOptions(options);
   let lastErr;
   for (let attempt = 0; attempt <= retryCount; attempt++) {

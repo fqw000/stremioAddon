@@ -176,6 +176,7 @@ function emit(level, tag, msg, ctx = {}) {
     level,
     tag: String(tag),
     msg: safe,
+    ...(tag === 'section' ? { section: true } : {}),
     ...(ctx && typeof ctx === 'object' ? { ctx } : {}),
   };
 
@@ -196,11 +197,15 @@ export function createLogger(module, defaultCtx = {}) {
     const msg = args.map((a) => (typeof a === 'string' ? a : (() => { try { return JSON.stringify(a); } catch (e) { return String(a); } })())).join(' ');
     return emit(level, tag, msg, defaultCtx);
   };
+  // section：事项分区标题，页面渲染成阶段区块。签名 section(title, extraCtx)
+  const section = (title, extraCtx = {}) =>
+    emit('info', 'section', `========= ${title} =========`, { ...defaultCtx, ...(extraCtx || {}) });
   return {
     debug: bind('debug'),
     info: bind('info'),
     warn: bind('warn'),
     error: bind('error'),
+    section,
     child: (extra) => createLogger(tag, { ...defaultCtx, ...(extra || {}) }),
     // 允许单次调用附带 reqId：log.info.ctx({reqId,path}, msg, ...)
     with: (extra) => createLogger(tag, { ...defaultCtx, ...(extra || {}) }),

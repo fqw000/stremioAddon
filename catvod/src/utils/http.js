@@ -17,6 +17,7 @@
 //   throw lastErr;
 // }
 import { log } from "../logger.js";
+import { loggedFetch } from "./http-log.js";
 
 export async function fetchWithRetry(url, { headers = {}, timeoutMs = 8000, retries = 1 } = {}) {
   let lastErr;
@@ -25,9 +26,8 @@ export async function fetchWithRetry(url, { headers = {}, timeoutMs = 8000, retr
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
     try {
-      log.info(`=============== ${url} ===============`);
-      const res = await fetch(url, { headers, signal: ctrl.signal, redirect: "follow" });
-      log.info(`[ ☕️ ] 响应状态: ${res.status}`);
+      // 统一底层请求日志：URL(脱敏)/method/status/type/字节/耗时，debug 级
+      const res = await loggedFetch(url, { headers, signal: ctrl.signal, redirect: "follow" }, { tag: 'fetch' });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
       const text = await res.text();
       log.debug(`[ ☕️ ]  ${attempt+1}/${retries+1}请求成功`);

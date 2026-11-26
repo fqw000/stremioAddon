@@ -170,16 +170,16 @@
         }
 
         // ===== 调试模式 =====
-        // 同时写入随机 uid：全局日志汇总靠它区分不同用户（同一浏览器稳定）
+        // 用户标识 uid：所有安装链接都带，日志汇总靠它区分不同用户（同一浏览器稳定）
+        config.uid = getOrCreateDebugUid();
         if (el.dbg && el.dbg.checked) {
             config.dbg = true;
-            config.uid = getOrCreateDebugUid();
         }
 
         return config;
     }
 
-    // 调试用户标识：8 位随机值，localStorage 持久化；仅 debug 开启时进入 cfg
+    // 用户标识：8 位随机值，localStorage 持久化；所有安装链接都带，用于日志汇总区分用户
     function getOrCreateDebugUid() {
         try {
             let uid = localStorage.getItem('jpyy555_dbg_uid');

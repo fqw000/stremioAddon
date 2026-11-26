@@ -13,6 +13,7 @@
 import { CONFIG, DEFAULT_HEADERS } from './config.js';
 import { buildSignHeaders } from './sign.js';
 import { createLogger } from './logger.js';
+import { loggedFetch } from './http-log.js';
 
 const log = createLogger('HTTP');
 
@@ -36,9 +37,9 @@ async function fetchWithTimeout(url, options, timeout) {
   const start = Date.now();
 
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    // 统一底层请求日志：URL(脱敏)/method/status/type/字节/耗时，debug 级
+    const res = await loggedFetch(url, { ...options, signal: controller.signal }, { tag: 'fetch' });
     clearTimeout(timer);
-    log.info(`${res.status} (${Date.now() - start}ms) ${url}`);
     return res;
   } catch (err) {
     clearTimeout(timer);
