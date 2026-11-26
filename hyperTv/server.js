@@ -7,7 +7,7 @@ import handler from './api/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(__dirname, 'public');
-const PORT = Number(process.env.PORT || 7000);
+const PORT = Number(process.env.PORT || 7100);
 const HOST = process.env.HOST || '127.0.0.1';
 
 const MIME = {

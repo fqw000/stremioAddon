@@ -2,6 +2,7 @@
 // 中文标题 / 中文简介 / 中文海报与背景均来自 zh-CN 页面，不是英文 API 结果
 import { cached } from './cache.js';
 import { logThrottled, normalizeText } from './helper.js';
+import { loggedFetch } from './http-log.js';
 
 const WEB = 'https://www.themoviedb.org';
 const DAY = 86400000;
@@ -23,12 +24,16 @@ async function fetchHtml(url, ms = 9000) {
   const timer = setTimeout(() => ctrl.abort(), ms);
   const label = new URL(url).pathname;
   try {
-    const r = await fetch(url, {
-      signal: ctrl.signal,
-      redirect: 'follow',
-      // 实测 TMDB 网页对常见浏览器 UA 返回 403，用 curl UA + */* 可稳定拿到 zh-CN 页面
-      headers: { 'accept-language': 'zh-CN,zh;q=0.9', accept: '*/*', 'user-agent': 'curl/8.7.1' },
-    });
+    const r = await loggedFetch(
+      url,
+      {
+        signal: ctrl.signal,
+        redirect: 'follow',
+        // 实测 TMDB 网页对常见浏览器 UA 返回 403，用 curl UA + */* 可稳定拿到 zh-CN 页面
+        headers: { 'accept-language': 'zh-CN,zh;q=0.9', accept: '*/*', 'user-agent': 'curl/8.7.1' },
+      },
+      { tag: 'tmdb-web', label: 'TMDB 网页' },
+    );
     if (r.status === 403 || r.status === 429) {
       blockedUntil = Date.now() + BLOCK_MS;
       logThrottled(

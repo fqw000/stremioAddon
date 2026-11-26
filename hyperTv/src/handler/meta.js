@@ -91,9 +91,9 @@ function seriesVideos(prefix, item, info) {
   const videos = [];
   for (const [seasonKey, episodes] of Object.entries(info?.episodes ?? {})) {
     for (const ep of episodes ?? []) {
-      const ext = safeExtension(ep.container_extension);
-      // 实测：container_extension 为空的分集在源站返回 nginx 欢迎页，跳过
-      if (!ext && !ep.direct_source) continue;
+      // 新站实测：container_extension=null 的分集用 .mp4 请求同样返回 206 video/mp4，
+      // 旧版「返回 nginx 欢迎页需跳过」已失效；按接口文档兜底 mp4。
+      const ext = safeExtension(ep.container_extension) || 'mp4';
       const season = Number(ep.season ?? seasonKey) || 1;
       const episode = Number(ep.episode_num) || 0;
       const released = airDate(ep.info);

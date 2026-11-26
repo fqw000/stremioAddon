@@ -1,6 +1,7 @@
 // 底层 API 适配：原生 fetch + 超时 + inflight 去重 + 缓存（SOP 阶段一/五）
-import { HYPETV_BASE, hashId, cleanUrl, log } from './helper.js';
+import { HYPETV_BASE, HYPETV_KEY, hashId, cleanUrl, log } from './helper.js';
 import { cached } from './cache.js';
+import { loggedFetch } from './http-log.js';
 
 const DEFAULT_TIMEOUT = 25000;
 
@@ -8,12 +9,16 @@ async function request(url, options = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), options.timeout ?? DEFAULT_TIMEOUT);
   try {
-    const r = await fetch(url, {
-      method: options.method ?? 'GET',
-      headers: { accept: '*/*', ...(options.headers ?? {}) },
-      body: options.body,
-      signal: ctrl.signal,
-    });
+    const r = await loggedFetch(
+      url,
+      {
+        method: options.method ?? 'GET',
+        headers: { accept: '*/*', ...(options.headers ?? {}) },
+        body: options.body,
+        signal: ctrl.signal,
+      },
+      { tag: 'upstream', label: '源站 API' },
+    );
     if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
     return r;
   } finally {
@@ -48,7 +53,12 @@ export function getBuiltinLists() {
 }
 
 export function xtreamBase(source) {
-  if (source.type === 'hypetv') return `${HYPETV_BASE}/api/x/${source.listId}`;
+  // 新版站点：内置列表统一走 /api/x/k/{key}/{listId}，旧 /api/x/{id} 已 404
+  if (source.type === 'hypetv') {
+    const key = encodeURIComponent(source.key || HYPETV_KEY);
+    const listId = encodeURIComponent(source.listId || '1');
+    return `${HYPETV_BASE}/api/x/k/${key}/${listId}`;
+  }
   return String(source.server).replace(/\/+$/, '');
 }
 
@@ -158,6 +168,8 @@ export async function getCatalogItems(source, kind) {
   if (source.type === 'm3u') {
     const target = `${HYPETV_BASE}/api/fetch?u=${encodeURIComponent(source.url)}`;
     const text = await getText(target, 600000);
+    log.info(`🌐 [请求 路径]： `,target);
+
     return parseM3U(text || '');
   }
   const action =

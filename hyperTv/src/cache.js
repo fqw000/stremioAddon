@@ -122,4 +122,10 @@ export function clearCache() {
   mem.clear();
 }
 
+// 只读探测：日志里区分「命中缓存」和「真的打了上游」，不改缓存状态
+export function peekCache(key) {
+  const hit = mem.get(key);
+  return !!hit && hit.exp > Date.now();
+}
+
 export const cacheKey = hashId;

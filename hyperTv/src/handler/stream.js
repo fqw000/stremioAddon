@@ -4,13 +4,64 @@ import { buildPlayUrl, getCatalogItems, getSeriesInfo, proxyUrl } from '../adapt
 import { findItem, isImdbId, parseId } from '../resolver.js';
 import { cleanUrl, encodeDebugData, safeExtension } from '../helper.js';
 import { resolveImdbToCatalog } from '../tmdb.js';
-import { diagnoseSubtitle } from './subtitle.js';
+import { diagnoseSubtitle, collectSubtitles, needsSubtitleProxy } from './subtitle.js';
 
 const SOURCE_LABEL = {
   hypetv: '内置片库',
   xtream: 'Xtream 账号',
   m3u: 'M3U 列表',
 };
+
+// 内嵌字幕预算：冷启动要串行「源站详情 -> TMDB -> OpenSubtitles」，给足 4s；
+// 超过就放弃（客户端随后仍会打 /subtitles，不阻塞首播），结果有 1 小时缓存，二次打开基本瞬时
+const EMBED_SUBS_BUDGET_MS = 6000;
+
+// 把字幕直接挂到 stream 对象上（官方 Stream Object 支持 subtitles 字段）。
+// 背景：部分客户端只在真正开播时才请求 /subtitles，浏览列表时完全没有字幕请求，
+// 表现为「只有一个影片有字幕」。内嵌后即使客户端不发字幕请求也能选到字幕。
+async function attachSubtitles(streams, ctx) {
+  const { type, id, config, prefix, addonBase } = ctx;
+  const L = ctx.logger || { debug() {}, info() {}, warn() {}, error() {}, section() {} };
+  if (!streams.length || type === 'channel') return 0;
+
+  const job = collectSubtitles({ type, id, config, prefix, addonBase, extra: {}, logger: L, embed: true }).catch((e) => {
+    L.warn('stream', `内嵌字幕解析失败: ${e.message}`);
+    return null;
+  });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), EMBED_SUBS_BUDGET_MS));
+  let result = null;
+  try {
+    result = await Promise.race([job, timeout]);
+  } catch {
+    result = null;
+  }
+  if (!result || result === 'timeout') {
+    L.info('stream', `内嵌字幕跳过（超过 ${EMBED_SUBS_BUDGET_MS}ms 预算），客户端稍后仍可走 /subtitles`);
+    return 0;
+  }
+  const { subtitles, diag } = result;
+  if (!subtitles.length) {
+    L.info('stream', `无内嵌字幕：${diag.error || '上游无中英字幕'}`);
+    return 0;
+  }
+  const useProxy = config.subtitleProxy !== false && !!addonBase;
+  // 只有需要 Referer 的源走代理，其余直连
+  const items = subtitles.map((s) => ({
+    id: s.id,
+    url: useProxy && needsSubtitleProxy(s.url) ? `${addonBase}/api/subtitle?u=${encodeURIComponent(s.url)}` : s.url,
+    lang: s.lang,
+    label: s.label,
+  }));
+  let attached = 0;
+  for (const s of streams) {
+    if (s.name === '诊断信息') continue;
+    s.subtitles = items;
+    attached += 1;
+  }
+  L.info('stream', `内嵌字幕 ${items.length} 条（${diag.langs.join(',') || '无'}）到 ${attached} 条流，imdb=${diag.imdbId}`);
+  return items.length;
+}
+
 
 function filenameOf(title, ext, fallback) {
   const base = String(title || fallback || 'video')
@@ -44,10 +95,10 @@ function makeStream(url, opts) {
   };
 }
 
-// 诊断流只在 debug=true 时生成；诊断上下文全部编码进 URL，用户可直接复制反馈
+// 诊断流默认不注入播放列表：需 debug=true（记录日志）且 diagnosticStream=true（显式开启）
 function diagnostic(ctx, title, description, details = {}) {
   const { config, addonBase, type, id } = ctx;
-  if (!config.debug) return null;
+  if (!config.debug || !config.diagnosticStream) return null;
   const data = {
     v: 1,
     ts: new Date().toISOString(),
@@ -76,6 +127,7 @@ function withDiagnostic(streams, ctx, title, description, details) {
 
 export async function handleStream(ctx) {
   const { type, id, config, prefix } = ctx;
+  const L = ctx.logger || { debug() {}, info() {}, warn() {}, error() {}, section() {} };
   let parsed = parseId(id);
   let contentTitle = '';
   if (isImdbId(id)) {
@@ -122,7 +174,8 @@ export async function handleStream(ctx) {
     // 没有 defaultVideoId 的客户端兜底：取第一个可用分集
     const info = await getSeriesInfo(config.source, parsed.key);
     const episodes = Object.values(info?.episodes ?? {}).flat();
-    const ep = episodes.find((e) => safeExtension(e.container_extension) || e.direct_source);
+    // 新站空扩展名分集同样可用 mp4 兜底，不再跳过（旧站会返回 nginx 欢迎页）
+    const ep = episodes.find((e) => e?.id);
     if (!ep) {
       return {
         streams: withDiagnostic([], ctx, '无可用分集', '源站未返回可播放的分集。', {
@@ -177,8 +230,19 @@ export async function handleStream(ctx) {
     if (s) streams.push(s);
     altIndex += 1;
   }
+  L.info(
+    'stream',
+    `片源匹配 key=${target.episodeId || target.key} 标题="${contentTitle}" 格式=${built.ext} 线路=${streams.length} 代理=${config.useProxy}`,
+  );
+  // 回显实际播放地址（上游真实地址；走代理时客户端拿到的是 /api/stream?u=... 包装）
+  [built.url, ...(built.alt ?? [])].filter(Boolean).forEach((u, i) => {
+    L.info('stream', `播放地址 ${i + 1} ${u}${config.useProxy ? '（经插件代理下发）' : '（直连）'}`);
+  });
 
-  // 调试模式下附带字幕诊断，便于确认「没有字幕」是 ID 映射还是上游结果的问题
+  // 字幕随流下发：客户端不请求 /subtitles 时也能选字幕（见 attachSubtitles 注释）
+  await attachSubtitles(streams, ctx);
+
+  // 仅在显式开启诊断流时附加字幕诊断（默认 debug 日志模式不污染播放列表）
   if (config.debug) {
     const subInfo = await diagnoseSubtitle(id, type, config, prefix, {}, ctx.logger);
     withDiagnostic(

@@ -4,6 +4,7 @@
 import { cached } from './cache.js';
 import { getCatalogItems } from './adapter.js';
 import { hashId, log, normalizeText, yearFromName } from './helper.js';
+import { loggedFetch } from './http-log.js';
 import { webDetail, webSearch } from './tmdb-web.js';
 
 const DAY = 86400000;
@@ -13,7 +14,9 @@ const CINEMETA = 'https://v3-cinemeta.strem.io';
 function timeoutFetch(url, ms = 6000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  return loggedFetch(url, { signal: ctrl.signal }, { tag: 'tmdb', label: 'TMDB API' }).finally(() =>
+    clearTimeout(timer),
+  );
 }
 
 function languageOf(config) {
@@ -325,6 +328,22 @@ export async function fetchImdbIdByTmdbId(tmdbId, media, config) {
   );
   const value = String(data?.imdb_id || '');
   return /^tt\d{5,10}$/i.test(value) ? value : '';
+}
+
+// ttid -> TMDB ID（vidzee 字幕源按 TMDB ID 索引）
+export async function fetchTmdbIdByImdb(imdbId, media, config) {
+  const id = String(imdbId || '');
+  if (!/^tt\d{5,10}$/i.test(id)) return 0;
+  if (!tmdbEnabled(config)) return 0;
+  const found = await cached(
+    `tt:findid:${scope(config)}:${id}`,
+    7 * DAY,
+    () => tmdbGet(config, `find/${id}`, { external_source: 'imdb_id' }),
+    { negativeTtlMs: DAY },
+  );
+  const tv = media === 'series' || media === 'tv';
+  const hit = tv ? (found?.tv_results?.[0] || found?.movie_results?.[0]) : (found?.movie_results?.[0] || found?.tv_results?.[0]);
+  return Number(hit?.id) || 0;
 }
 
 // 站内条目 -> imdb_id（字幕接口的入口）

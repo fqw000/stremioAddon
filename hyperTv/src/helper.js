@@ -1,5 +1,11 @@
 // 通用工具：Edge Runtime 兼容，仅使用 Web Standard API
-export const HYPETV_BASE = 'https://hypetv.mihawkdev.com';
+export const HYPETV_BASE = 'https://hypetvbr.com';
+// 新版内置列表需在路径中带开发者 key（POST /api/dev {"code":"123"} 换得）
+export const HYPETV_KEY = String(
+  globalThis.process?.env?.HYPETV_KEY ||
+    globalThis.process?.env?.HYPETV_DEV_KEY ||
+    'cfc467d74225f369b541d032',
+);
 export const APP_PREFIX = 'hypetv-addon:v1';
 
 // 日志实现统一收敛到 logger.js（保留从 helper 导入的旧用法）
@@ -93,9 +99,12 @@ export function corsHeaders(extra = {}) {
 }
 
 export function jsonResponse(data, options = {}) {
-  const { status = 200, cacheMaxAge = 0, staleRevalidate = 0, staleError = 0 } = options;
+  const { status = 200, cacheMaxAge = 0, staleRevalidate = 0, staleError = 0, noCache = false } = options;
   const headers = corsHeaders({ 'content-type': 'application/json; charset=utf-8' });
-  if (cacheMaxAge > 0) {
+  if (noCache) {
+    // manifest 等声明类响应：强制客户端每次重新校验，避免旧版资源声明被长期缓存
+    headers['cache-control'] = 'public, no-cache, max-age=60';
+  } else if (cacheMaxAge > 0) {
     let cc = `public, max-age=${cacheMaxAge}`;
     if (staleRevalidate) cc += `, stale-while-revalidate=${staleRevalidate}`;
     if (staleError) cc += `, stale-if-error=${staleError}`;

@@ -1,5 +1,5 @@
 // 配置层：用户配置（?cfg=base64url） > 环境变量默认 > 代码默认
-import { decodeConfig, hashId } from './helper.js';
+import { decodeConfig, hashId, HYPETV_KEY } from './helper.js';
 
 const BUILTIN_LIVE_RESTRICTED = true;
 // 用户提供的可用 Key，作为服务端默认值；配置页/环境变量可覆盖
@@ -9,13 +9,14 @@ const BUILTIN_TMDB_PROXY = 'https://api.tmdb.org/3';
 function baseConfig(sourceType = 'hypetv') {
   return {
     // 内置列表的直播流实测 403（站点声明仅部分账号开放），默认关闭
-    source: { type: 'hypetv', listId: '1' },
+    source: { type: 'hypetv', listId: '1', key: HYPETV_KEY },
     catalogs: {
       live: sourceType !== 'hypetv',
       vod: true,
       series: true,
     },
-    useProxy: true,
+    // 片源默认直连：源站 302 到 CDN，带 CORS/Range，客户端可直接播；代理仅作兜底开关
+    useProxy: false,
     // TMDB 元数据：用户配置 > 环境变量 > 默认代理（沿用本机其他 addon 的惯例）
     tmdbApiKey: String(
       globalThis.process?.env?.TMDB_API_KEY ||
@@ -31,10 +32,10 @@ function baseConfig(sourceType = 'hypetv') {
     subtitleLang: 'both',
     // 字幕 URL 走 addon 同源代理，规避客户端 UA / 防盗链 403
     subtitleProxy: true,
-    // 开发调试模式：仅此模式返回诊断流（含可复制的诊断 URL），默认关闭
+    // 开发调试模式：只控制日志/回显，不再默认往 stream 里塞诊断流
     debug: /^(1|true|yes)$/i.test(String(globalThis.process?.env?.HYPETV_DEBUG || '')),
-    // 运行日志级别：DEBUG 会在终端强制输出完整链路（含字幕请求、ID 解析、上游结果）
-    logLevel: String(globalThis.process?.env?.LOG_LEVEL || 'info').toLowerCase(),
+    // 诊断流默认关闭：需 cfg.diagnosticStream=true 或 HYPETV_DIAGNOSTIC_STREAM=1 显式开启
+    diagnosticStream: /^(1|true|yes)$/i.test(String(globalThis.process?.env?.HYPETV_DIAGNOSTIC_STREAM || '')),
   };
 }
 
@@ -46,7 +47,11 @@ export function normalizeConfig(raw) {
   const s = raw.source;
   if (s && typeof s === 'object') {
     if (s.type === 'hypetv') {
-      out.source = { type: 'hypetv', listId: String(s.listId || '1') };
+      out.source = {
+        type: 'hypetv',
+        listId: String(s.listId || '1'),
+        key: String(s.key || s.devKey || HYPETV_KEY),
+      };
     } else if (s.type === 'xtream' && s.server && s.username !== undefined && s.password !== undefined) {
       out.source = {
         type: 'xtream',
@@ -78,7 +83,7 @@ export function normalizeConfig(raw) {
   if (['both', 'zh', 'en'].includes(raw.subtitleLang)) out.subtitleLang = raw.subtitleLang;
   if (typeof raw.subtitleProxy === 'boolean') out.subtitleProxy = raw.subtitleProxy;
   if (typeof raw.debug === 'boolean') out.debug = raw.debug;
-  if (['debug', 'info', 'warn', 'error'].includes(raw.logLevel)) out.logLevel = raw.logLevel;
+  if (typeof raw.diagnosticStream === 'boolean') out.diagnosticStream = raw.diagnosticStream;
 
   return out;
 }
