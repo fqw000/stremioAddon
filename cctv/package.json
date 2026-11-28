@@ -1,0 +1,17 @@
+{
+  "name": "cctv-doc-addon",
+  "version": "1.0.0",
+  "description": "Stremio addon for CCTV documentary library (jishi.cctv.com)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "stremio-addon-sdk": "^1.6.10"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
